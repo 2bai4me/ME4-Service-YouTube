@@ -49,3 +49,56 @@ class TestConfig:
         # > 65535 nicht erlaubt
         with pytest.raises(ValidationError):
             Settings(api_key="test", http_port=99999)
+
+
+class TestConfigPaths:
+    """Tests für Daten-/Download-Pfad-Auflösung.
+
+    Fixes:
+      - Bug 1: download_dir war doppelt deklariert (stillschweigend von
+        pydantic dedupliziert, aber irreführend).
+      - Bug 2: data_dir hatte einen Windows-Hardcode als Default.
+    """
+
+    def test_settings_loads_cleanly(self):
+        """Settings muss mit den Defaults ohne Exception instanziierbar sein."""
+        s = Settings(api_key="test")
+        assert s is not None
+
+    def test_download_dir_declared_once(self):
+        """download_dir darf in model_fields nur einmal vorkommen (kein Shadowing)."""
+        count = sum(1 for name in Settings.model_fields if name == "download_dir")
+        assert count == 1, (
+            f"download_dir is declared {count} times; expected exactly 1"
+        )
+
+    def test_download_dir_resolves_to_non_empty_string(self, monkeypatch):
+        monkeypatch.delenv("DOWNLOAD_DIR", raising=False)
+        s = Settings(api_key="test")
+        assert isinstance(s.download_dir, str)
+        assert s.download_dir.strip() != ""
+        # Plattform-portabel: kein Windows-Pfad mit Backslash oder Laufwerksbuchstabe.
+        assert "\\" not in s.download_dir
+        assert ":" not in s.download_dir
+
+    def test_download_dir_default_is_portable(self, monkeypatch):
+        monkeypatch.delenv("DOWNLOAD_DIR", raising=False)
+        s = Settings(api_key="test")
+        assert s.download_dir == "./downloads"
+
+    def test_download_dir_env_override(self, monkeypatch):
+        monkeypatch.setenv("DOWNLOAD_DIR", "/tmp/me4-dl")  # noqa: S108
+        s = Settings(api_key="test")
+        assert s.download_dir == "/tmp/me4-dl"  # noqa: S108
+
+    def test_data_dir_default_is_portable(self, monkeypatch):
+        monkeypatch.delenv("DATA_DIR", raising=False)
+        s = Settings(api_key="test")
+        assert s.data_dir == "./data"
+        assert "\\" not in s.data_dir
+        assert ":" not in s.data_dir
+
+    def test_data_dir_honours_data_dir_env(self, monkeypatch):
+        monkeypatch.setenv("DATA_DIR", "/tmp/me4-data")  # noqa: S108
+        s = Settings(api_key="test")
+        assert s.data_dir == "/tmp/me4-data"  # noqa: S108

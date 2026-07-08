@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ME4-YouTube — Job-Detail</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><text y='13' font-size='14'>▶</text></svg>" />
+  <link rel="stylesheet" href="/ui/style.css" />
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <span class="logo">▶</span>
+      <div>
+        <h1>ME4-YouTube</h1>
+        <span class="subtitle">Job-Detail · <span id="version">v1.0.0</span></span>
+      </div>
+    </div>
+    <div class="status-pill" id="conn-status">
+      <span class="dot"></span><span>verbinde…</span>
+    </div>
+  </header>
+
+  <main>
+    <!-- Job-Header (immer sichtbar) -->
+    <section class="card job-header" id="jobHeader">
+      <div class="job-header__title">
+        <h2 id="jobTitle">Warte auf Job…</h2>
+        <span class="badge" id="jobState">idle</span>
+      </div>
+      <div class="job-header__meta">
+        <div class="kv">
+          <span class="k">Job-ID</span>
+          <span class="v" id="jobId">—</span>
+        </div>
+        <div class="kv">
+          <span class="k">URL</span>
+          <span class="v url" id="jobUrl">—</span>
+        </div>
+        <div class="kv">
+          <span class="k">Worker</span>
+          <span class="v" id="jobWorker">—</span>
+        </div>
+        <div class="kv">
+          <span class="k">Dauer</span>
+          <span class="v" id="jobDuration">—</span>
+        </div>
+      </div>
+      <div class="job-header__close" id="closeHint" style="display:none;">
+        <span class="hint-spinner">⏱</span>
+        <span>Dieses Fenster schliesst automatisch in <strong id="closeCountdown">3</strong>s nach erfolgreichem Abschluss…</span>
+      </div>
+    </section>
+
+    <!-- Process-Log (aufklappbar, default zu) -->
+    <details class="card collapsible" id="logDetails" open>
+      <summary>
+        <span>📋 Detailliertes Process-Log</span>
+        <span class="log-info" id="logStats">0 Einträge</span>
+        <button id="clearLogBtn" onclick="event.preventDefault(); clearLog()" class="secondary">Leeren</button>
+        <button id="exportLogBtn" onclick="event.preventDefault(); exportLog()" class="secondary">Export</button>
+      </summary>
+      <div id="log" class="log"></div>
+    </details>
+
+    <!-- Ergebnis (aufklappbar, default zu) -->
+    <details class="card collapsible" id="resultDetails">
+      <summary>
+        <span>📊 Ergebnis</span>
+        <span class="log-info" id="resultStats">—</span>
+      </summary>
+      <div id="resultContent"></div>
+    </details>
+
+    <!-- Persistenz (aufklappbar, default zu) -->
+    <details class="card collapsible" id="persistenceDetails">
+      <summary>
+        <span>💾 Persistierung</span>
+        <span class="log-info" id="persistenceStats">—</span>
+      </summary>
+      <div id="persistenceContent"></div>
+    </details>
+
+    <!-- Worker-Pool (aufklappbar, default zu) -->
+    <details class="card collapsible" id="workerDetails">
+      <summary>
+        <span>📊 Worker-Pool</span>
+        <span class="log-info" id="workerStats">—</span>
+      </summary>
+      <ul id="worker-list" class="worker-list">
+        <li class="empty">Lade Worker…</li>
+      </ul>
+    </details>
+  </main>
+
+  <footer>
+    <span>ME4-YouTube · Schnittstellen-Standard-konform (MCP + ZMQ + WSSP-15 + Framie)</span>
+  </footer>
+
+  <script src="/ui/app.js"></script>
+</body>
+</html>

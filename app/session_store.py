@@ -1,0 +1,401 @@
+"""Session-basierte Persistenz für ME4-YouTube.
+
+Jede Session (identifiziert durch eine vom Baustein vergebene ID) bekommt
+ein eigenes Verzeichnis unter ``data/sessions/<session_id>/``.  Darin liegt
+eine ``Notes.md``-Logdatei und pro Funktionsaufruf ein numeriertes
+Unterverzeichnis (``01-get-metadata/``, ``02-download/``, …) mit jeweils
+``result.json`` (Rohdaten), ``result.md`` (hübsch formatierte Variante)
+und ``result.html`` (standalone HTML-Version mit eingebettetem Styling).
+
+Das Baustein zeigt im Chat nur noch den Pfad — die eigentlichen Daten
+werden vom Service bei sich lokal abgelegt.
+"""
+from __future__ import annotations
+
+import datetime as _dt
+import json
+import os
+from pathlib import Path
+from typing import Any
+
+import markdown as _md
+
+from app.config import settings
+from app.logging_config import get_logger
+
+logger = get_logger(__name__)
+
+
+# ---------------------------------------------------------------------------
+# Pfad-Layout
+# ---------------------------------------------------------------------------
+#
+#   <sessions-root>/
+#     <session_id>/
+#       Notes.md                       # Logdatei, erste Zeile = Session-ID
+#       01-get-metadata/
+#         result.json
+#         result.md
+#       02-get-transcript/
+#         ...
+#       03-download/
+#         result.json
+#         result.md
+#         <downloaded files>            # tatsächliche Video-/Audio-Datei
+#
+
+def _slug(s: str) -> str:
+    """Sanitize a function name for use as a directory name."""
+    return (
+        s.lower()
+        .replace(" ", "-")
+        .replace("(", "")
+        .replace(")", "")
+        .replace("/", "-")
+    )
+
+
+def get_session_dir(session_id: str) -> Path:
+    """Root directory for a session."""
+    safe_id = "".join(c for c in session_id if c.isalnum() or c in "-_") or "unknown"
+    base = Path(settings.data_dir) / "sessions" / safe_id
+    base.mkdir(parents=True, exist_ok=True)
+    return base
+
+
+def get_function_dir(session_id: str, function_name: str) -> Path:
+    """Per-call subdirectory: <session>/<NN-slug>/.
+
+    The numeric prefix is sequential — incremented by counting existing
+    numbered subdirs.
+    """
+    base = get_session_dir(session_id)
+    existing = sorted(p for p in base.iterdir() if p.is_dir() and p.name[:2].isdigit())
+    next_idx = len(existing) + 1
+    func_dir = base / f"{next_idx:02d}-{_slug(function_name)}"
+    func_dir.mkdir(parents=True, exist_ok=True)
+    return func_dir
+
+
+# ---------------------------------------------------------------------------
+# Persistenz
+# ---------------------------------------------------------------------------
+
+def update_session_notes(
+    session_id: str,
+    function_name: str,
+    result: dict[str, Any],
+    request: dict[str, Any] | None = None,
+) -> None:
+    """Append one section to <session>/Notes.md and ensure the first
+    line is the session id itself (idempotent).
+    """
+    base = get_session_dir(session_id)
+    notes_path = base / "Notes.md"
+    ts = _dt.datetime.now().isoformat(timespec="seconds")
+    lines: list[str] = []
+
+    if not notes_path.exists():
+        # First write: the session id as the very first line.
+        lines.append(f"# Session `{session_id}`\n")
+        lines.append(f"_Erstellt: {ts}_\n")
+
+    rel = f"`{function_name}`"
+    lines.append(f"\n## {ts} — {rel}\n")
+    if request:
+        url = request.get("url")
+        if url:
+            lines.append(f"- **URL:** `{url}`")
+        lang = request.get("language")
+        if lang:
+            lines.append(f"- **Sprache:** `{lang}`")
+    ok = result.get("success")
+    if ok is not None:
+        lines.append(f"- **Result:** {'✅ success' if ok else '❌ failed'}")
+    # link to the result files
+    rel_dir = f"./{Path(result['_dir']).name}" if result.get("_dir") else ""
+    if rel_dir:
+        lines.append(
+            f"- **Files:** "
+            f"[{rel_dir}/result.json]({rel_dir}/result.json) · "
+            f"[{rel_dir}/result.md]({rel_dir}/result.md) · "
+            f"[{rel_dir}/result.html]({rel_dir}/result.html)"
+        )
+    if result.get("path"):
+        lines.append(f"- **Binary:** `{result['path']}`")
+    if result.get("file"):
+        lines.append(f"- **Filename:** `{result['file']}`")
+    if result.get("title"):
+        lines.append(f"- **Title:** {result['title']}")
+    if result.get("error"):
+        lines.append(f"- **Error:** {result['error']}")
+
+    with notes_path.open("a", encoding="utf-8") as f:
+        f.write("\n".join(lines) + "\n")
+
+
+def format_result_markdown(function_name: str, result: dict[str, Any]) -> str:
+    """Format a function result as readable Markdown.
+
+    Keeps the structure human-friendly: H1 with the function name,
+    H2 sections for each logical group, fenced JSON for raw data,
+    bullet lists for arrays.
+    """
+    lines: list[str] = [f"# {function_name}\n"]
+    ts = _dt.datetime.now().isoformat(timespec="seconds")
+    lines.append(f"_Generated: {ts}_\n")
+
+    # ---- success / error block
+    ok = result.get("success")
+    if ok is True:
+        lines.append("**✅ success**\n")
+    elif ok is False:
+        lines.append(f"**❌ failed** — {result.get('error', '')}\n")
+    else:
+        lines.append("\n")
+
+    # ---- video_id (if present)
+    if "video_id" in result:
+        lines.append(f"**Video ID:** `{result['video_id']}`\n")
+
+    # ---- main "value" fields
+    skip = {"success", "error", "video_id", "_dir", "path", "file"}
+    scalars: list[tuple[str, Any]] = []
+    arrays: list[tuple[str, list[Any]]] = []
+    nested: list[tuple[str, dict[str, Any]]] = []
+    for k, v in result.items():
+        if k in skip:
+            continue
+        if isinstance(v, list):
+            arrays.append((k, v))
+        elif isinstance(v, dict):
+            nested.append((k, v))
+        else:
+            scalars.append((k, v))
+
+    if scalars:
+        lines.append("## Result\n")
+        for k, v in scalars:
+            lines.append(f"- **{k}:** `{v}`")
+        lines.append("")
+
+    if arrays:
+        for k, v in arrays:
+            lines.append(f"## {k}\n")
+            for item in v:
+                if isinstance(item, dict):
+                    lines.append(format_dict_item(item))
+                else:
+                    lines.append(f"- `{item}`")
+            lines.append("")
+
+    if nested:
+        for k, v in nested:
+            lines.append(f"## {k}\n")
+            for sk, sv in v.items():
+                if isinstance(sv, (list, dict)):
+                    lines.append(f"### {sk}\n")
+                    lines.append("```json")
+                    lines.append(json.dumps(sv, ensure_ascii=False, indent=2))
+                    lines.append("```\n")
+                else:
+                    lines.append(f"- **{sk}:** `{sv}`")
+            lines.append("")
+
+    # ---- raw JSON dump at the bottom
+    lines.append("## Raw JSON\n")
+    lines.append("```json")
+    clean = {k: v for k, v in result.items() if k != "_dir"}
+    lines.append(json.dumps(clean, ensure_ascii=False, indent=2))
+    lines.append("```")
+    return "\n".join(lines) + "\n"
+
+
+def format_dict_item(d: dict[str, Any]) -> str:
+    """Format a single dict (e.g. one transcript snippet) as Markdown."""
+    parts = [f"`{k}`={repr(v)}" for k, v in d.items()]
+    return "- " + " · ".join(parts)
+
+
+def write_result(
+    session_id: str,
+    function_name: str,
+    result: dict[str, Any],
+    request: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Persist ``result`` as JSON + Markdown in the session dir and
+    update Notes.md.  Returns the paths and a short summary for the
+    Baustein chat notification.
+    """
+    if not session_id:
+        # Without a session id we can't write anywhere; return the raw
+        # result unchanged so the caller can still surface it.
+        return result
+
+    func_dir = get_function_dir(session_id, function_name)
+
+    # 1) JSON
+    clean = {k: v for k, v in result.items() if k != "_dir"}
+    json_path = func_dir / "result.json"
+    json_path.write_text(
+        json.dumps(clean, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+    # 2) Markdown
+    md_path = func_dir / "result.md"
+    md_text = format_result_markdown(function_name, clean)
+    md_path.write_text(
+        md_text,
+        encoding="utf-8",
+    )
+
+    # 3) HTML (standalone, mit eingebettetem Styling)
+    html_path = func_dir / "result.html"
+    html_path.write_text(
+        format_result_html(function_name, clean, md_text),
+        encoding="utf-8",
+    )
+
+    # 4) Annotate the result so the caller can find the dir back
+    result["_dir"] = str(func_dir)
+
+    # 5) Append to Notes.md
+    update_session_notes(session_id, function_name, result, request)
+
+    return result
+
+
+def read_session_notes(session_id: str) -> str | None:
+    """Read the full Notes.md for a session (used by the Baustein's
+    /api/chat/session/:id endpoint so the user can pull the log)."""
+    p = get_session_dir(session_id) / "Notes.md"
+    if not p.exists():
+        return None
+    return p.read_text(encoding="utf-8")
+
+
+# ─── HTML rendering ──────────────────────────────────────────────────────
+
+# Stylesheet embedded in every result.html so the file renders nicely
+# when opened directly in a browser (no external dependencies).
+_HTML_STYLE = """
+:root {
+  --bg: #0f1419;
+  --panel: #161c24;
+  --text: #d8dde6;
+  --muted: #8a94a6;
+  --accent: #ff8a3d;
+  --link: #6ab7ff;
+  --border: #2a323d;
+  --ok: #5dd39e;
+  --fail: #ff6b6b;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  padding: 32px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+               "Helvetica Neue", Arial, sans-serif;
+  font-size: 15px;
+  line-height: 1.55;
+}
+main {
+  max-width: 880px;
+  margin: 0 auto;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 28px 32px;
+}
+header.result-head {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 12px;
+  margin-bottom: 18px;
+}
+header.result-head h1 { margin: 0 0 4px 0; font-size: 22px; }
+header.result-head .ts {
+  color: var(--muted); font-size: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.badge {
+  display: inline-block; padding: 2px 8px; border-radius: 999px;
+  font-size: 12px; font-weight: 600;
+  background: rgba(93, 211, 158, 0.15); color: var(--ok);
+}
+.badge.fail {
+  background: rgba(255, 107, 107, 0.15); color: var(--fail);
+}
+h2 { color: var(--accent); margin-top: 24px; font-size: 17px; }
+h3 { color: var(--text); margin-top: 18px; font-size: 15px; }
+a { color: var(--link); text-decoration: none; }
+a:hover { text-decoration: underline; }
+code {
+  background: rgba(255, 255, 255, 0.06);
+  padding: 1px 5px; border-radius: 3px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+}
+pre {
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 12px;
+  overflow-x: auto;
+  font-size: 12px;
+  line-height: 1.45;
+}
+ul, ol { padding-left: 22px; }
+li { margin-bottom: 4px; }
+hr { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
+img { max-width: 100%; border-radius: 4px; }
+""".strip()
+
+
+def format_result_html(
+    function_name: str,
+    result: dict[str, Any],
+    md_text: str,
+) -> str:
+    """Render a standalone HTML file from the same Markdown that we
+    wrote to ``result.md``.  The file has no external dependencies and
+    opens directly in any modern browser.
+    """
+    # markdown→HTML; the markdown lib escapes <, >, & by default, which
+    # gives us XSS safety for arbitrary yt-dlp / transcript payloads.
+    body_html = _md.markdown(
+        md_text,
+        extensions=["fenced_code", "tables", "sane_lists"],
+        output_format="html5",
+    )
+    ok = result.get("success")
+    badge_html = (
+        '<span class="badge">✅ success</span>'
+        if ok
+        else '<span class="badge fail">❌ failed</span>'
+        if ok is False
+        else ""
+    )
+    title = function_name
+    ts = _dt.datetime.now().isoformat(timespec="seconds")
+    return (
+        "<!DOCTYPE html>\n"
+        '<html lang="en">\n'
+        "<head>\n"
+        '  <meta charset="utf-8">\n'
+        f"  <title>{title} — result</title>\n"
+        f"  <style>{_HTML_STYLE}</style>\n"
+        "</head>\n"
+        "<body>\n"
+        "  <main>\n"
+        '    <header class="result-head">\n'
+        f"      <h1>{title}</h1>\n"
+        f'      <span class="ts">Generated {ts}</span> {badge_html}\n'
+        "    </header>\n"
+        f"    {body_html}\n"
+        "  </main>\n"
+        "</body>\n"
+        "</html>\n"
+    )

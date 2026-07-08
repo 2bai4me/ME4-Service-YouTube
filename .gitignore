@@ -1,0 +1,37 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+
+# Logs
+*.log
+service.log
+
+# Daten
+downloads/
+.env
+.env.local
+*.db
+*.sqlite3
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# WSSP
+*.pid
+
+# Session-Arbeitsdaten (lokal, nicht im Repo)
+Bewegungsdaten/
+data/
+downloads/
+wssp15/
+wssp15.bak/

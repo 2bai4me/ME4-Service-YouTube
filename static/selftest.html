@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ME4-YouTube — Self-Test</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+      background: linear-gradient(135deg, #0a0e1a 0%, #1a1f3a 100%);
+      color: #e2e8f0;
+      min-height: 100vh;
+      padding: 1.5rem;
+    }
+    .container { max-width: 1100px; margin: 0 auto; }
+    header { margin-bottom: 2rem; }
+    h1 { font-size: 1.8rem; font-weight: 700; color: #fff; margin-bottom: 0.4rem; }
+    h1 .logo { color: #ef4444; }
+    .subtitle { color: #94a3b8; font-size: 0.95rem; }
+    .badge {
+      display: inline-block;
+      padding: 0.2rem 0.6rem;
+      border-radius: 0.4rem;
+      font-size: 0.8rem;
+      font-weight: 600;
+      background: rgba(59,130,246,0.15);
+      color: #60a5fa;
+      border: 1px solid rgba(59,130,246,0.3);
+    }
+    .badge.ok    { background: rgba(34,197,94,0.15);  color: #4ade80; border-color: rgba(34,197,94,0.3); }
+    .badge.err   { background: rgba(239,68,68,0.15);  color: #f87171; border-color: rgba(239,68,68,0.3); }
+    .badge.run   { background: rgba(234,179,8,0.15);  color: #fbbf24; border-color: rgba(234,179,8,0.3); }
+    .badge.idle  { background: rgba(148,163,184,0.15);color: #94a3b8; border-color: rgba(148,163,184,0.3); }
+
+    .card {
+      background: rgba(30, 41, 59, 0.6);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(148, 163, 184, 0.1);
+      border-radius: 0.75rem;
+      padding: 1.5rem;
+      margin-bottom: 1.25rem;
+    }
+    .card h2 { font-size: 1.15rem; margin-bottom: 1rem; color: #f1f5f9; }
+
+    label { display: block; font-size: 0.85rem; color: #94a3b8; margin-bottom: 0.4rem; font-weight: 500; }
+    input[type="text"], select {
+      width: 100%; padding: 0.65rem 0.85rem;
+      background: #0f172a; border: 1px solid #334155;
+      border-radius: 0.4rem; color: #f1f5f9; font-size: 0.95rem;
+      transition: border-color 0.15s;
+    }
+    input[type="text"]:focus, select:focus {
+      outline: none; border-color: #60a5fa;
+      box-shadow: 0 0 0 3px rgba(96,165,250,0.1);
+    }
+
+    .grid { display: grid; grid-template-columns: 2fr 1fr; gap: 1rem; margin-bottom: 1rem; }
+    @media (max-width: 700px) { .grid { grid-template-columns: 1fr; } }
+
+    .opts { display: flex; gap: 1.25rem; flex-wrap: wrap; margin-top: 1rem; }
+    .opts label { display: flex; align-items: center; gap: 0.4rem; margin: 0; color: #cbd5e1; cursor: pointer; }
+    .opts input { width: auto; }
+
+    .btn {
+      display: inline-flex; align-items: center; gap: 0.5rem;
+      padding: 0.75rem 1.4rem; font-size: 0.95rem; font-weight: 600;
+      border: 0; border-radius: 0.5rem; cursor: pointer;
+      transition: all 0.15s;
+    }
+    .btn-primary { background: #2563eb; color: #fff; }
+    .btn-primary:hover:not(:disabled) { background: #1d4ed8; transform: translateY(-1px); }
+    .btn-primary:disabled { background: #475569; cursor: not-allowed; opacity: 0.7; }
+    .btn-secondary { background: rgba(148,163,184,0.15); color: #cbd5e1; border: 1px solid #475569; }
+    .btn-secondary:hover { background: rgba(148,163,184,0.25); }
+
+    .actions { display: flex; gap: 0.75rem; margin-top: 1rem; flex-wrap: wrap; }
+
+    .kv { display: grid; grid-template-columns: 140px 1fr; gap: 0.5rem; padding: 0.4rem 0; border-bottom: 1px solid rgba(148,163,184,0.08); font-size: 0.9rem; }
+    .kv:last-child { border-bottom: 0; }
+    .kv .k { color: #94a3b8; font-weight: 500; }
+    .kv .v { color: #e2e8f0; word-break: break-all; }
+    .kv .v.url { font-family: ui-monospace, monospace; font-size: 0.85rem; color: #60a5fa; }
+
+    pre {
+      background: #0f172a;
+      border: 1px solid #334155;
+      border-radius: 0.5rem;
+      padding: 1rem;
+      font-family: ui-monospace, 'JetBrains Mono', monospace;
+      font-size: 0.8rem;
+      line-height: 1.5;
+      color: #cbd5e1;
+      overflow-x: auto;
+      max-height: 400px;
+      overflow-y: auto;
+    }
+
+    .log { max-height: 240px; overflow-y: auto; font-size: 0.82rem; font-family: ui-monospace, monospace; }
+    .log-line { padding: 0.2rem 0.5rem; border-radius: 0.25rem; margin-bottom: 0.2rem; }
+    .log-line.info { color: #93c5fd; }
+    .log-line.success { color: #4ade80; }
+    .log-line.error { color: #f87171; background: rgba(239,68,68,0.1); }
+    .log-line.warn { color: #fbbf24; }
+    .log-line.req { color: #c084fc; }
+    .log-line.resp { color: #67e8f9; }
+
+    .spinner {
+      display: inline-block; width: 14px; height: 14px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin 0.6s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .result-section { margin-top: 1rem; }
+    .result-section h3 { font-size: 0.95rem; color: #cbd5e1; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem; }
+    .result-section .count { color: #94a3b8; font-size: 0.8rem; font-weight: 400; }
+
+    .comment {
+      background: rgba(15, 23, 42, 0.5);
+      border: 1px solid rgba(148, 163, 184, 0.1);
+      border-radius: 0.5rem;
+      padding: 0.75rem;
+      margin-bottom: 0.5rem;
+      font-size: 0.85rem;
+    }
+    .comment .author { color: #60a5fa; font-weight: 600; }
+    .comment .likes { color: #f87171; font-size: 0.8rem; margin-left: 0.5rem; }
+    .comment .text { color: #cbd5e1; margin-top: 0.3rem; line-height: 1.4; }
+
+    .transcript-segment {
+      padding: 0.4rem 0.6rem;
+      border-left: 2px solid #475569;
+      margin-bottom: 0.4rem;
+      font-size: 0.85rem;
+      line-height: 1.4;
+      color: #cbd5e1;
+    }
+    .transcript-segment .ts {
+      color: #60a5fa;
+      font-family: ui-monospace, monospace;
+      font-size: 0.75rem;
+      font-weight: 600;
+      margin-right: 0.5rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1><span class="logo">▶</span> ME4-YouTube Self-Test</h1>
+      <div class="subtitle">
+        Testet die <code>/api/process</code>-Schnittstelle direkt vom Service aus.
+        Wenn dieser Test funktioniert, ist der Service OK — und ein Problem liegt im Aufruf durch die App.
+      </div>
+      <div style="margin-top: 0.6rem;">
+        <span class="badge idle" id="connStatus">Warte auf Verbindung</span>
+        <span class="subtitle" style="margin-left: 0.75rem;">Service: <span id="serviceInfo">—</span></span>
+      </div>
+    </header>
+
+    <!-- 1) Service-Health-Check -->
+    <section class="card">
+      <h2>1) Service-Status</h2>
+      <div class="actions">
+        <button class="btn btn-secondary" id="btnHealth">Service-Health pruefen</button>
+        <button class="btn btn-secondary" id="btnManifest">Manifest laden</button>
+        <button class="btn btn-secondary" id="btnCleanLog">Log loeschen</button>
+      </div>
+      <div id="healthResult" style="margin-top: 1rem;"></div>
+    </section>
+
+    <!-- 2) URL-Eingabe -->
+    <section class="card">
+      <h2>2) YouTube-URL verarbeiten (POST /api/process)</h2>
+      <div class="grid">
+        <div>
+          <label for="urlInput">YouTube-URL</label>
+          <input type="text" id="urlInput" value="https://www.youtube.com/watch?v=dQw4w9WgXcQ" placeholder="https://www.youtube.com/watch?v=..." />
+        </div>
+        <div>
+          <label for="langSelect">Sprache</label>
+          <select id="langSelect">
+            <option value="de">Deutsch (de)</option>
+            <option value="en">Englisch (en)</option>
+          </select>
+        </div>
+      </div>
+      <div class="opts">
+        <label><input type="checkbox" id="optDescription" checked /> Beschreibung</label>
+        <label><input type="checkbox" id="optTranscript" checked /> Transkript</label>
+        <label><input type="checkbox" id="optComments" checked /> Kommentare</label>
+        <label><input type="checkbox" id="optDownload" /> Video herunterladen</label>
+      </div>
+      <div class="actions">
+        <button class="btn btn-primary" id="btnTest">▶ Service direkt aufrufen</button>
+        <button class="btn btn-secondary" id="btnSimulate">postMessage simulieren (wie App)</button>
+        <span id="statusBadge" class="badge idle" style="align-self: center;">bereit</span>
+      </div>
+    </section>
+
+    <!-- 3) Live-Log -->
+    <section class="card">
+      <h2>3) Log</h2>
+      <div class="log" id="log"></div>
+    </section>
+
+    <!-- 4) Ergebnis -->
+    <section class="card" id="resultCard" style="display: none;">
+      <h2>4) Ergebnis <span id="resultMeta" class="subtitle"></span></h2>
+      <div id="resultContent"></div>
+    </section>
+
+    <!-- 5) Raw Response (JSON) -->
+    <section class="card" id="rawCard" style="display: none;">
+      <h2>5) Raw JSON-Response</h2>
+      <pre id="rawJson"></pre>
+    </section>
+  </div>
+
+  <script>
+    // ─── Helpers ──────────────────────────────────────────────────
+    const logEl = document.getElementById('log');
+    function log(msg, type = 'info') {
+      const ts = new Date().toLocaleTimeString();
+      const line = document.createElement('div');
+      line.className = `log-line ${type}`;
+      line.textContent = `[${ts}] ${msg}`;
+      logEl.appendChild(line);
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+    function clearLog() { logEl.innerHTML = ''; }
+
+    function setStatus(text, kind = 'idle') {
+      const badge = document.getElementById('statusBadge');
+      badge.className = `badge ${kind}`;
+      badge.textContent = text;
+    }
+
+    function setConn(text, kind = 'idle') {
+      const badge = document.getElementById('connStatus');
+      badge.className = `badge ${kind}`;
+      badge.textContent = text;
+    }
+
+    function fmtDuration(s) {
+      if (!s || isNaN(s)) return '—';
+      if (s < 60) return `${s.toFixed(1)}s`;
+      const m = Math.floor(s / 60);
+      const sec = Math.floor(s % 60);
+      return `${m}m ${sec}s`;
+    }
+
+    function fmtNumber(n) {
+      if (n == null) return '—';
+      return n.toLocaleString('de-DE');
+    }
+
+    function fmtTimestamp(iso) {
+      if (!iso) return '—';
+      try { return new Date(iso).toLocaleString('de-DE'); } catch { return iso; }
+    }
+
+    // ─── Buttons ──────────────────────────────────────────────────
+    document.getElementById('btnCleanLog').addEventListener('click', clearLog);
+
+    document.getElementById('btnHealth').addEventListener('click', async () => {
+      log('Pruefe Service-Health (GET /)...', 'req');
+      try {
+        const res = await fetch('/');
+        const data = await res.json();
+        log(`Health-Check: HTTP ${res.status}`, res.ok ? 'success' : 'error');
+        log(`  Service: ${data.service} v${data.version}`, 'info');
+        log(`  Framie-UI: ${data.framie}`, 'info');
+        log(`  API-Docs: ${data.api_docs}`, 'info');
+        document.getElementById('serviceInfo').textContent = `${data.service} v${data.version}`;
+        setConn('Service erreichbar', 'ok');
+        document.getElementById('healthResult').innerHTML = `
+          <div class="kv"><span class="k">Service</span><span class="v">${data.service}</span></div>
+          <div class="kv"><span class="k">Version</span><span class="v">${data.version}</span></div>
+          <div class="kv"><span class="k">Framie-UI</span><span class="v url">${data.framie}</span></div>
+          <div class="kv"><span class="k">API-Docs</span><span class="v url">${data.api_docs}</span></div>
+        `;
+      } catch (e) {
+        log(`Health-Check FEHLGESCHLAGEN: ${e.message}`, 'error');
+        setConn('Service NICHT erreichbar', 'err');
+      }
+    });
+
+    document.getElementById('btnManifest').addEventListener('click', async () => {
+      log('Lade Manifest (GET /api/manifest)...', 'req');
+      try {
+        const res = await fetch('/api/manifest');
+        const data = await res.json();
+        log(`Manifest geladen: HTTP ${res.status}`, res.ok ? 'success' : 'error');
+        document.getElementById('healthResult').innerHTML = `
+          <div class="kv"><span class="k">Service-ID</span><span class="v">${data.service_id}</span></div>
+          <div class="kv"><span class="k">Service-Name</span><span class="v">${data.service_name}</span></div>
+          <div class="kv"><span class="k">Version</span><span class="v">${data.version}</span></div>
+          <div class="kv"><span class="k">Sprachen</span><span class="v">${(data.languages || []).join(', ')}</span></div>
+          <div class="kv"><span class="k">Capabilities</span><span class="v">${(data.capabilities || []).join(', ')}</span></div>
+        `;
+      } catch (e) {
+        log(`Manifest-Laden FEHLGESCHLAGEN: ${e.message}`, 'error');
+      }
+    });
+
+    async function runProcessTest(simulatePostMessage = false) {
+      const url = document.getElementById('urlInput').value.trim();
+      const lang = document.getElementById('langSelect').value;
+      const body = {
+        url,
+        download: document.getElementById('optDownload').checked,
+        include_description: document.getElementById('optDescription').checked,
+        include_transcript: document.getElementById('optTranscript').checked,
+        include_comments: document.getElementById('optComments').checked,
+        language: lang,
+        max_comments: 5
+      };
+
+      if (!url) { log('Keine URL eingegeben!', 'error'); return; }
+
+      setStatus('verarbeitet...', 'run');
+      const btn = document.getElementById('btnTest');
+      const btnSim = document.getElementById('btnSimulate');
+      btn.disabled = true; btnSim.disabled = true;
+      const startTime = performance.now();
+
+      log(`POST /api/process`, 'req');
+      log(`  url: ${url}`, 'req');
+      log(`  options: ${JSON.stringify(body)}`, 'req');
+
+      try {
+        const res = await fetch('/api/process', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-API-Key': 'ob-youtube-key-2026'
+          },
+          body: JSON.stringify(body)
+        });
+        const elapsed = ((performance.now() - startTime) / 1000).toFixed(2);
+        const data = await res.json();
+        log(`Response: HTTP ${res.status} in ${elapsed}s`, res.ok ? 'success' : 'error');
+
+        if (!res.ok) {
+          log(`Fehler-Detail: ${JSON.stringify(data)}`, 'error');
+          setStatus(`fehler (HTTP ${res.status})`, 'err');
+        } else {
+          renderResult(data, elapsed);
+          if (simulatePostMessage) {
+            simulateAppPostMessage(data);
+          }
+          setStatus(`OK (${elapsed}s)`, 'ok');
+        }
+
+        // Raw JSON immer anzeigen
+        document.getElementById('rawCard').style.display = 'block';
+        document.getElementById('rawJson').textContent = JSON.stringify(data, null, 2);
+      } catch (e) {
+        log(`NETWORK-ERROR: ${e.message}`, 'error');
+        setStatus('Netzwerk-Fehler', 'err');
+      } finally {
+        btn.disabled = false; btnSim.disabled = false;
+      }
+    }
+
+    function renderResult(data, elapsed) {
+      const card = document.getElementById('resultCard');
+      card.style.display = 'block';
+      document.getElementById('resultMeta').textContent = `(Dauer: ${elapsed}s)`;
+
+      const meta = data.metadata || {};
+      const transcript = data.transcript || {};
+      const comments = data.comments || [];
+
+      let html = '';
+      // Header mit Titel + Thumbnail
+      html += `<div style="display: flex; gap: 1rem; margin-bottom: 1rem; align-items: flex-start;">`;
+      if (meta.thumbnail) {
+        html += `<img src="${meta.thumbnail}" style="width: 200px; border-radius: 0.5rem;" onerror="this.style.display='none'" />`;
+      }
+      html += `<div style="flex: 1;">`;
+      html += `<h3 style="font-size: 1.1rem; margin-bottom: 0.3rem;">${meta.title || '—'}</h3>`;
+      html += `<div class="subtitle">${meta.channel || '—'} &middot; ${fmtTimestamp(meta.upload_date)}</div>`;
+      html += `</div></div>`;
+
+      // Metadaten-KV
+      html += '<div class="kv"><span class="k">video_id</span><span class="v">' + (meta.video_id || '—') + '</span></div>';
+      html += '<div class="kv"><span class="k">channel_id</span><span class="v">' + (meta.channel_id || '—') + '</span></div>';
+      html += '<div class="kv"><span class="k">duration</span><span class="v">' + fmtDuration(meta.duration_sec) + '</span></div>';
+      html += '<div class="kv"><span class="k">views</span><span class="v">' + fmtNumber(meta.view_count) + '</span></div>';
+      html += '<div class="kv"><span class="k">likes</span><span class="v">' + fmtNumber(meta.like_count) + '</span></div>';
+      html += '<div class="kv"><span class="k">language</span><span class="v">' + (meta.language || '—') + '</span></div>';
+      if (meta.tags && meta.tags.length) {
+        html += '<div class="kv"><span class="k">tags</span><span class="v">' + meta.tags.slice(0, 8).map(t => `<span class="badge" style="margin-right: 0.3rem;">${t}</span>`).join('') + '</span></div>';
+      }
+
+      // Description
+      if (meta.description) {
+        html += `<div class="result-section"><h3>Beschreibung</h3>`;
+        html += `<div style="background: rgba(15,23,42,0.5); padding: 0.75rem; border-radius: 0.5rem; font-size: 0.85rem; max-height: 200px; overflow-y: auto; white-space: pre-wrap; color: #cbd5e1;">${meta.description.substring(0, 1500)}${meta.description.length > 1500 ? '...' : ''}</div>`;
+        html += `</div>`;
+      }
+
+      // Transcript
+      if (transcript.snippets && transcript.snippets.length) {
+        html += `<div class="result-section"><h3>Transkript <span class="count">(${transcript.snippets.length} Segmente, ${transcript.snippet_count || transcript.snippets.length} total)</span></h3>`;
+        html += `<div style="max-height: 300px; overflow-y: auto;">`;
+        transcript.snippets.slice(0, 10).forEach(s => {
+          html += `<div class="transcript-segment"><span class="ts">[${s.start ? s.start.toFixed(1) : '0.0'}s]</span>${s.text || ''}</div>`;
+        });
+        if (transcript.snippets.length > 10) {
+          html += `<div class="subtitle" style="text-align: center; padding: 0.5rem;">... ${transcript.snippets.length - 10} weitere Segmente (siehe Raw JSON)</div>`;
+        }
+        html += `</div></div>`;
+      }
+
+      // Comments
+      if (comments.length) {
+        html += `<div class="result-section"><h3>Kommentare <span class="count">(${comments.length})</span></h3>`;
+        comments.forEach(c => {
+          html += `<div class="comment">`;
+          html += `<span class="author">${c.author || 'anonymous'}</span>`;
+          if (c.like_count != null) html += `<span class="likes">❤ ${fmtNumber(c.like_count)}</span>`;
+          if (c.published) html += `<span class="subtitle" style="margin-left: 0.5rem;">${fmtTimestamp(c.published)}</span>`;
+          html += `<div class="text">${(c.text || '').substring(0, 400)}${(c.text || '').length > 400 ? '...' : ''}</div>`;
+          html += `</div>`;
+        });
+        html += `</div>`;
+      }
+
+      document.getElementById('resultContent').innerHTML = html;
+    }
+
+    function simulateAppPostMessage(data) {
+      log('=== Simuliere postMessage (was die App bekommen wuerde) ===', 'info');
+      const meta = data.metadata || {};
+      const transcript = data.transcript || {};
+      const payload = {
+        type: 'youtube-job-complete',
+        jobId: 'selftest_' + Date.now(),
+        url: meta.url || document.getElementById('urlInput').value,
+        result: {
+          video_id: meta.video_id,
+          title: meta.title,
+          channel: meta.channel,
+          channel_id: meta.channel_id,
+          duration_sec: meta.duration_sec,
+          view_count: meta.view_count,
+          like_count: meta.like_count,
+          upload_date: meta.upload_date,
+          language: meta.language,
+          thumbnail: meta.thumbnail,
+          description: meta.description,
+          tags: meta.tags,
+          categories: meta.categories,
+          chapters: meta.chapters,
+          transcript: { snippet_count: transcript.snippet_count, snippets: transcript.snippets },
+          comments: data.comments || [],
+          worker_id: data.worker_id,
+          job_duration_sec: data.job_duration_sec,
+          framie: data.framie
+        }
+      };
+      log(`postMessage-Payload: ${JSON.stringify(payload).length} bytes`, 'resp');
+      log(`  type: ${payload.type}`, 'resp');
+      log(`  jobId: ${payload.jobId}`, 'resp');
+      log(`  result.title: ${payload.result.title}`, 'resp');
+      log(`  result.transcript.snippets: ${payload.result.transcript.snippets?.length || 0}`, 'resp');
+      log(`  result.comments: ${payload.result.comments.length}`, 'resp');
+
+      // Tatsaechlich postMessage senden (an Parent-Frame, falls vorhanden)
+      if (window.parent !== window) {
+        log(`Sende postMessage an Parent-Frame...`, 'resp');
+        window.parent.postMessage(payload, '*');
+      } else {
+        log(`Kein Parent-Frame (standalone) — Payload nur geloggt`, 'resp');
+      }
+    }
+
+    document.getElementById('btnTest').addEventListener('click', () => runProcessTest(false));
+    document.getElementById('btnSimulate').addEventListener('click', () => runProcessTest(true));
+
+    // Auto-Health-Check beim Laden
+    log('Self-Test UI geladen. Klicke "Service-Health pruefen" fuer Verbindungstest.', 'info');
+    document.getElementById('btnHealth').click();
+  </script>
+</body>
+</html>

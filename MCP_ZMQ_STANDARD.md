@@ -10,7 +10,6 @@
 | Pflicht-Element | Status | Wo |
 |---|---|---|
 | ZMQ REQ/REP mit JSON-RPC 2.0 | ✅ | `app/zmq_service.py`, `app/loadbalancer.py` |
-| WSSP-15 Heartbeat | ✅ | `wssp15/heartbeat_emitter.py` |
 | API-Key Auth (X-API-Key / api_key) | ✅ | `app/auth.py` (HMAC-compare, constant-time) |
 | UI-Manifest | ✅ | `zmq_service._manifest()` + `/api/manifest` |
 | Service-ID | ✅ | `ME4-YOUTUBE` |
@@ -27,7 +26,6 @@
 | Schnittstelle | Zweck | Pflicht |
 |---|---|---|
 | HTTP / REST (Port 8770) | Browser, externe Tools | optional — ✅ implementiert |
-| WSSP-15 (Port 5690) | Telemetrie | ✅ implementiert |
 | Loadbalancer-MCP (Port 5571) | parallele Worker | ✅ implementiert |
 | MCP stdio | Agenten ohne ZMQ | ✅ implementiert |
 | Framie-UI | Live-Status | ✅ implementiert |

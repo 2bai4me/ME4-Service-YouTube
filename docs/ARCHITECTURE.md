@@ -177,11 +177,10 @@ YouTubeServiceError (Basis)
 
 Reihenfolge:
 1. HTTP-Server: keine neuen Requests
-2. WSSP-15: Heartbeat stoppen
-3. ZMQ-Main: keine neuen Requests
-4. ZMQ-Loadbalancer: stoppen
-5. Worker-Pool: alle Worker stoppen
-6. asyncio-Loop beenden
+2. ZMQ-Main: keine neuen Requests
+3. ZMQ-Loadbalancer: stoppen
+4. Worker-Pool: alle Worker stoppen
+5. asyncio-Loop beenden
 
 ---
 
@@ -218,7 +217,7 @@ FROM python:3.11-slim
 WORKDIR /app
 COPY . .
 RUN pip install --no-cache-dir -r requirements.txt
-EXPOSE 8770 5570 5571 5690
+EXPOSE 8770 5570 5571
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s \
   CMD curl -f http://localhost:8770/api/health || exit 1
 CMD ["python", "main.py", "--no-browser"]
@@ -234,7 +233,6 @@ services:
       - "8770:8770"
       - "5570:5570"
       - "5571:5571"
-      - "5690:5690"
     environment:
       - API_KEY=${API_KEY}
       - SM_PRODUCER_URL=http://smproducer:3001
@@ -255,7 +253,6 @@ Siehe [SERVICE_START.md §8](../SERVICE_START.md#8-deployment).
 | Worker-Health | Heartbeat (Memory) | alle 10s intern |
 | Job-Status | `GET /api/status` | live |
 | SSE-Stream | `GET /api/framie/stream` | live |
-| WSSP-15 | `ws://localhost:5690` | heartbeat |
 | Log-Datei | `service.log` (JSON) | dauerhaft |
 
 ---

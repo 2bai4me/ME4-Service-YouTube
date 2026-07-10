@@ -7,10 +7,9 @@ Boot-Sequenz (in fester Reihenfolge, dokumentiert in SERVICE_START.md):
   2. Worker-Pool aufbauen
   3. ZMQ-Lastbalancer hochfahren
   4. ZMQ-Hauptservice starten
-  5. WSSP-15 Heartbeat emittieren
-  6. HTTP-API + Framie-UI starten
-  7. SM-Producer-Anbindung initialisieren
-  8. Status: READY → Framie zeigt Live-Stream
+  5. HTTP-API + Framie-UI starten
+  6. SM-Producer-Anbindung initialisieren
+  7. Status: READY → Framie zeigt Live-Stream
 
 Modi:
   python main.py                  # Standard: alle Layer starten
@@ -44,7 +43,7 @@ BANNER = f"""
 +================================================================+
 |                  {__service_id__} v{__version__}                      |
 |         YouTube Content Extraction Service                    |
-|         MCP + ZMQ + HTTP + WSSP-15 + Framie                   |
+|         MCP + ZMQ + HTTP + Framie                              |
 +================================================================+
 """
 
@@ -60,7 +59,6 @@ class ServiceBootstrap:
         self.pool: Optional[WorkerPool] = None
         self.zmq_main: Optional[ZMQService] = None
         self.zmq_lb: Optional[LoadBalancerZMQ] = None
-        self.emitter = None
         self.http_server: Optional[uvicorn.Server] = None
 
     async def boot(self) -> None:
@@ -93,26 +91,8 @@ class ServiceBootstrap:
         self.zmq_main = ZMQService(pool=self.pool, port=settings.zmq_port)
         await self.zmq_main.start()
 
-        # === 4. WSSP-15 Heartbeat ===
-        try:
-            from wssp15.heartbeat_emitter import HeartbeatEmitter, StatusCode
-            logger.info("-> [4/5] Starte WSSP-15 Heartbeat auf Port %d...", settings.wssp15_port)
-            self.emitter = HeartbeatEmitter(
-                service_id=settings.service_id,
-                version=settings.service_version,
-                ws_port=settings.wssp15_port,
-            )
-            self.emitter.full_manifest = self.zmq_main._manifest()
-            self.emitter.update_ui_manifest({
-                "actions": self.zmq_main._manifest().get("actions", []),
-                "api_docs": f"http://localhost:{settings.http_port}/docs",
-            })
-            self.emitter.start()
-        except Exception as e:  # noqa: BLE001
-            logger.warning("WSSP-15 Heartbeat fehlgeschlagen: %s", e)
-
-        # === 5. HTTP-API + Framie-UI ===
-        logger.info("-> [5/5] Starte HTTP-API + Framie-UI auf Port %d...", settings.http_port)
+        # === 4. HTTP-API + Framie-UI ===
+        logger.info("-> [4/5] Starte HTTP-API + Framie-UI auf Port %d...", settings.http_port)
         app = build_app(pool=self.pool, zmq_service=self.zmq_main)
         config = uvicorn.Config(
             app, host=settings.host, port=settings.http_port,
@@ -163,7 +143,6 @@ class ServiceBootstrap:
         print(f"|  Health:          http://localhost:{settings.http_port}/api/health")
         print(f"|  ZMQ Main:        tcp://localhost:{settings.zmq_port}")
         print(f"|  ZMQ Loadbalancer: tcp://localhost:{settings.loadbalancer_zmq_port}")
-        print(f"|  WSSP-15:         ws://localhost:{settings.wssp15_port}")
         print(f"|  Worker-Pool:     {settings.worker_count} Instanzen ab :{settings.worker_base_port}")
         print("+----------------------------------------------------------------+")
         print("|  Framie-Status direkt im Browser sichtbar.                     |")
@@ -196,11 +175,6 @@ class ServiceBootstrap:
         logger.info("Shutdown wird eingeleitet…")
         if self.http_server:
             self.http_server.should_exit = True
-        if self.emitter:
-            try:
-                self.emitter.stop()
-            except Exception:  # noqa: BLE001
-                pass
         if self.zmq_main:
             await self.zmq_main.stop()
         if self.zmq_lb:

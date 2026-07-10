@@ -2,10 +2,9 @@
 
 > **Service-ID:** `ME4-YOUTUBE`  
 > **Version:** `1.0.0`  
-> **Schnittstellen:** MCP (stdio + ZMQ REQ/REP) + HTTP/REST + WSSP-15 + Framie-UI  
+> **Schnittstellen:** MCP (stdio + ZMQ REQ/REP) + HTTP/REST + Framie-UI  
 > **ZMQ Port Main:** `5570`  
 > **ZMQ Port Loadbalancer:** `5571`  
-> **WSSP-15 Port:** `5690`  
 > **Web Port:** `8770`
 
 ---
@@ -141,14 +140,7 @@ Header: `X-API-Key: <API_KEY>`
 
 ---
 
-## 4. WSSP-15 Telemetrie
-
-Heartbeat auf `ws://127.0.0.1:5690` — enthält Service-ID, Version,
-Status, Worker-Health, Manifest.
-
----
-
-## 5. Shutdown
+## 4. Shutdown
 
 - via MCP/ZMQ: Tool `shutdown` (mit `api_key`)
 - via HTTP: nicht vorgesehen (MCP-only)
@@ -213,7 +205,6 @@ Parse mit `json.loads(result["content"][0]["text"])`.
 - `fastapi` + `uvicorn` — HTTP-API
 - `httpx` — SM-Producer Anbindung
 - `pydantic` — Input-Validierung
-- `websockets` — WSSP-15
 
 Optional:
 - `ffmpeg` — für Audio-Konvertierung

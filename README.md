@@ -1,5 +1,14 @@
 # ME4-YouTube
 
+> **🧠 Standards:** Dieses Projekt folgt den ME4-Service-Bus-Standards v1.0.  
+> 📖 **Verbindlich:** [HUB-Thought im openBrain](http://localhost:9100/thought/a2d183a3-e6f8-48ab-9ba1-d7a9eae2399e) — die Single source of truth.  
+> ⚠️ **Abweichungen** MÜSSEN in einem PR begründet werden.
+
+[![ME4-Standard](https://img.shields.io/badge/ME4-Standard-v1.0-blue)](D:/Entwicklung/ME4-SERVICE-BUS-PILOT.md)
+[![openBrain](https://img.shields.io/badge/openBrain-HUB-green)](http://localhost:9100/thought/a2d183a3-e6f8-48ab-9ba1-d7a9eae2399e)
+[![SOA-konform](https://img.shields.io/badge/SOA-konform-ja-brightgreen)](D:/Entwicklung/ME4-SERVICE-BUS-PILOT.md)
+
+
 > **Service-ID:** `ME4-YOUTUBE`  
 > **Version:** 1.0.0  
 > **Schnittstellen:** MCP (stdio + ZMQ REQ/REP) + HTTP/REST + WSSP-15 + Framie-UI

@@ -35,3 +35,6 @@ data/
 downloads/
 wssp15/
 wssp15.bak/
+
+# Sidecar-Laufzeitkonfig (lokal, nicht im Repo — enthält API-Keys)
+sidecar-config.env

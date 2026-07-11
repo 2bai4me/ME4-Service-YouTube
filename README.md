@@ -7,11 +7,22 @@
 [![ME4-Standard](https://img.shields.io/badge/ME4-Standard-v1.0-blue)](D:/Entwicklung/ME4-SERVICE-BUS-PILOT.md)
 [![openBrain](https://img.shields.io/badge/openBrain-HUB-green)](http://localhost:9100/thought/a2d183a3-e6f8-48ab-9ba1-d7a9eae2399e)
 [![SOA-konform](https://img.shields.io/badge/SOA-konform-ja-brightgreen)](D:/Entwicklung/ME4-SERVICE-BUS-PILOT.md)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 
-> **Service-ID:** `ME4-YOUTUBE`  
-> **Version:** 1.0.0  
+> **Service-ID:** `ME4-YOUTUBE`
+> **Version:** 1.0.0
 > **Schnittstellen:** MCP (stdio + ZMQ REQ/REP) + HTTP/REST + Framie-UI
+
+## TL;DR
+
+- **Was:** YouTube-Content-Extraction-Service für die ME4-Suite — Video-Download, Metadaten, Transkripte, Top-Kommentare
+- **Capabilities:** `video_download`, `metadata_extraction`, `transcript_extraction`, `comments_extraction`, `translation`, `load_balancing`, `live_status_stream`, `sm_producer_integration`
+- **Ports:** HTTP 8770, ZMQ-Main 5570, ZMQ-Loadbalancer 5571, Worker-Pool 8771+
+- **Health:** `GET http://localhost:8770/api/health`
+- **Standard-Vertrag:** MCP + ZMQ REQ/REP (JSON-RPC 2.0), HMAC-compare API-Key Auth
+
+## Schnellstart
 
 YouTube Content Extraction Service für die ME4-Suite:
 - **Download** — Video- und Audio-Download via `yt-dlp`
@@ -22,8 +33,6 @@ YouTube Content Extraction Service für die ME4-Suite:
 - **Framie-UI** — Embedded Live-Status-Display
 
 ---
-
-## Schnellstart
 
 ```bash
 # Voraussetzungen: Python 3.11+, ffmpeg (optional, für Audio-Konvertierung)
@@ -291,3 +300,19 @@ Jeder Worker hat:
 - eigenen HTTP-Server (für eingehende Jobs vom Loadbalancer)
 - einen `Orchestrator` (führt die Pipeline aus)
 - Status-Updates landen im globalen `StatusTracker` → Framie-Stream
+
+---
+
+## Verweise
+
+- [`SERVICE.md`](SERVICE.md) — Schnittstellen-Spezifikation (HTTP/ZMQ/MCP/Auth)
+- [`FUNCTIONS.md`](FUNCTIONS.md) — Funktions-Katalog mit UI-Step-Flows (1:1-Spiegel von `/api/manifest.functions[]`)
+- [`SERVICE_START.md`](SERVICE_START.md) — Boot-Sequenz, Lifecycle, Deployment
+- [`AGENT.md`](AGENT.md) — Briefing für autonome Agenten
+- [`ARCHITECTURE.md`](ARCHITECTURE.md) — Design-Prinzipien, Datenflüsse, Security-Modell
+- [`docs/SM_PRODUCER_INTEGRATION.md`](docs/SM_PRODUCER_INTEGRATION.md) — SM-Producer-Anbindung im Detail
+- [`docs/INTEGRATION.md`](docs/INTEGRATION.md) — UI↔Service-Vertrag (Pilot-Phase 5)
+- [`CHANGELOG.md`](CHANGELOG.md) — Versionierte Änderungshistorie (Keep-a-Changelog 1.1)
+- [`LICENSE`](LICENSE) — MIT
+
+Pilot-Standards: `D:\Entwicklung\ME4-SERVICE-BUS-PILOT.md` Sektion 0.5 (Dokumentations-Pflichtstruktur).

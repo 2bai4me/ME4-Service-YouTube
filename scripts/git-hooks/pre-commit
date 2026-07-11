@@ -1,0 +1,93 @@
+#!/usr/bin/env bash
+#
+# Pre-commit hook: enforces Pilot 0.5 documentation standards locally
+# (the GitHub Actions workflow enforces them in CI — this is the local mirror).
+#
+# Install:
+#   cp scripts/git-hooks/pre-commit .git/hooks/pre-commit
+#   chmod +x .git/hooks/pre-commit
+#
+# Skip (NOT recommended):
+#   git commit --no-verify
+#
+# This hook intentionally fails fast on the most common issues:
+#   - CHANGELOG.md has no [Unreleased] block
+#   - README.md has no badge block in first 10 lines
+#   - Internal Markdown links are broken
+
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+ERRORS=0
+
+# 1. CHANGELOG.md check
+if [ -f "$REPO_ROOT/CHANGELOG.md" ]; then
+  if ! head -30 "$REPO_ROOT/CHANGELOG.md" | grep -q '^## \[Unreleased\]'; then
+    echo "❌ CHANGELOG.md missing [Unreleased] block (Pilot 0.5.3)"
+    ERRORS=$((ERRORS + 1))
+  fi
+fi
+
+# 2. README.md badge-block check
+if [ -f "$REPO_ROOT/README.md" ]; then
+  if ! head -10 "$REPO_ROOT/README.md" | grep -q '!\[' ; then
+    echo "❌ README.md missing badge block in first 10 lines (Pilot 0.2)"
+    ERRORS=$((ERRORS + 1))
+  fi
+fi
+
+# 3. Markdown link audit (uses pilot-tooling script)
+PILOT_AUDIT="D:/Entwicklung/scripts/audit-md-links.py"
+if [ -f "$PILOT_AUDIT" ]; then
+  if ! python "$PILOT_AUDIT" "$REPO_ROOT" > /tmp/md-audit.log 2>&1; then
+    echo "❌ Markdown link audit failed:"
+    cat /tmp/md-audit.log | sed 's/^/  /'
+    ERRORS=$((ERRORS + 1))
+  fi
+else
+  echo "ℹ️  Skipping Markdown link audit: $PILOT_AUDIT not found"
+fi
+
+# 4. Required files check (Pilot 0.5.2)
+REQUIRED=(
+  README.md
+  LICENSE
+  .env.example
+  CHANGELOG.md
+  AGENT.md
+  SERVICE.md
+  FUNCTIONS.md
+  SERVICE_START.md
+  ARCHITECTURE.md
+  docs/INTEGRATION.md
+)
+for f in "${REQUIRED[@]}"; do
+  if [ ! -f "$REPO_ROOT/$f" ]; then
+    echo "❌ Missing required file (Pilot 0.5.2): $f"
+    ERRORS=$((ERRORS + 1))
+  fi
+done
+
+# 5. .env.example has no real secrets
+if [ -f "$REPO_ROOT/.env.example" ]; then
+  # Check for patterns that look like real API keys (sk-..., ghp_..., Bearer ..., etc.)
+  # Allow: *** placeholders, empty values, descriptive strings
+  if grep -E '^[^#]*(KEY|TOKEN|SECRET|PASSWORD)\s*=\s*[a-zA-Z0-9_-]{16,}\s*$' "$REPO_ROOT/.env.example" 2>/dev/null \
+     | grep -v -E '=\s*(\*\*\*|""\s*|changeme|placeholder|<.*>)\s*$' > /tmp/secrets.log; then
+    if [ -s /tmp/secrets.log ]; then
+      echo "❌ .env.example contains suspicious values that look like real secrets:"
+      cat /tmp/secrets.log | sed 's/^/  /'
+      ERRORS=$((ERRORS + 1))
+    fi
+  fi
+fi
+
+if [ $ERRORS -gt 0 ]; then
+  echo ""
+  echo "❌ Pre-commit hook: $ERRORS violation(s) found."
+  echo "Fix the issues above, or use 'git commit --no-verify' to skip (NOT recommended)."
+  exit 1
+fi
+
+echo "✅ Pre-commit hook: all Pilot 0.5 checks pass"
+exit 0

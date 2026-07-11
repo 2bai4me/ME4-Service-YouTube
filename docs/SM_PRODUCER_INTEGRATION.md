@@ -64,7 +64,7 @@ SM-Producer nicht erreichbar (kann später starten): ...
 
 ```bash
 curl -X POST http://localhost:8770/api/sm-produce \
-  -H "X-API-Key: ob-youtube-key-2026" \
+  -H "X-API-Key: <YOUR_API_KEY>" \
   -H "Content-Type: application/json" \
   -d '{
     "url": "https://youtu.be/dQw4w9WgXcQ",
@@ -107,7 +107,7 @@ sock.send_json({
             "transcript": "Never gonna give you up...",
             "language": "de",
             "workflow": "default",
-            "api_key": "ob-youtube-key-2026",
+            "api_key": "<YOUR_API_KEY>",
         }
     }
 })
@@ -133,7 +133,7 @@ r = httpx.post("http://localhost:8770/api/process", json={
     "include_transcript": True,
     "include_description": True,
     "language": "de",
-}, headers={"X-API-Key": "ob-youtube-key-2026"})
+}, headers={"X-API-Key": "<YOUR_API_KEY>"})
 
 data = r.json()
 transcript_text = " ".join(s["text"] for s in data["transcript"]["snippets"])
@@ -145,7 +145,7 @@ r = httpx.post("http://localhost:8770/api/sm-produce", json={
     "language": "de",
     "workflow": "youtube-to-short",
     "metadata": data["metadata"],
-}, headers={"X-API-Key": "ob-youtube-key-2026"})
+}, headers={"X-API-Key": "<YOUR_API_KEY>"})
 
 print("Pipeline gestartet:", r.json())
 ```

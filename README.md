@@ -114,13 +114,13 @@ Beim Start öffnet sich automatisch die **Framie-UI** im Browser unter
 ```bash
 # Metadaten + Beschreibung
 curl -X POST http://localhost:8770/api/metadata \
-  -H "X-API-Key: ob-youtube-key-2026" \
+  -H "X-API-Key: <YOUR_API_KEY>" \
   -H "Content-Type: application/json" \
   -d '{"url":"https://youtu.be/dQw4w9WgXcQ"}'
 
 # Komplette Verarbeitung (alle Features)
 curl -X POST http://localhost:8770/api/process \
-  -H "X-API-Key: ob-youtube-key-2026" \
+  -H "X-API-Key: <YOUR_API_KEY>" \
   -H "Content-Type: application/json" \
   -d '{
     "url":"https://youtu.be/dQw4w9WgXcQ",
@@ -148,7 +148,7 @@ sock.send_json({
         "name": "process",
         "arguments": {
             "url": "https://youtu.be/dQw4w9WgXcQ",
-            "api_key": "ob-youtube-key-2026",
+            "api_key": "<YOUR_API_KEY>",
         }
     }
 })
@@ -182,7 +182,7 @@ sock.send_json({
         "name": "process",
         "arguments": {
             "url": "https://youtu.be/dQw4w9WgXcQ",
-            "api_key": "ob-youtube-key-2026",
+            "api_key": "<YOUR_API_KEY>",
         }
     }
 })
@@ -198,7 +198,7 @@ Der Service kann direkt die SM-Producer-Pipeline (ME4-SMproducer-3) anstoßen:
 
 ```bash
 curl -X POST http://localhost:8770/api/sm-produce \
-  -H "X-API-Key: ob-youtube-key-2026" \
+  -H "X-API-Key: <YOUR_API_KEY>" \
   -H "Content-Type: application/json" \
   -d '{
     "url":"https://youtu.be/dQw4w9WgXcQ",
@@ -312,6 +312,7 @@ Jeder Worker hat:
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) — Design-Prinzipien, Datenflüsse, Security-Modell
 - [`docs/SM_PRODUCER_INTEGRATION.md`](docs/SM_PRODUCER_INTEGRATION.md) — SM-Producer-Anbindung im Detail
 - [`docs/INTEGRATION.md`](docs/INTEGRATION.md) — UI↔Service-Vertrag (Pilot-Phase 5)
+- [`MCP_ZMQ_STANDARD.md`](MCP_ZMQ_STANDARD.md) — verbindlicher MCP+ZMQ-Standard für alle ME4-Services
 - [`CHANGELOG.md`](CHANGELOG.md) — Versionierte Änderungshistorie (Keep-a-Changelog 1.1)
 - [`LICENSE`](LICENSE) — MIT
 - [`CONTRIBUTING.md`](CONTRIBUTING.md) — wie du beitragen kannst

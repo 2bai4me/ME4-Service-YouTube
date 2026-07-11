@@ -17,6 +17,30 @@ Mit deiner Teilnahme verpflichtest du dich, dessen Regeln einzuhalten. Verstöß
 - [`ARCHITECTURE.md`](ARCHITECTURE.md) — Design-Dokumentation
 - [`docs/INTEGRATION.md`](docs/INTEGRATION.md) — UI↔Service-Vertrag
 
+## Pre-Commit-Hook (lokal)
+
+Das Repo enthält einen **lokalen** Pre-Commit-Hook unter `scripts/git-hooks/pre-commit`,
+der dieselben Regeln prüft wie der GitHub-Actions-Workflow `.github/workflows/docs-lint.yml`.
+
+**Install (einmalig nach Clone):**
+```bash
+cp scripts/git-hooks/pre-commit .git/hooks/pre-commit
+chmod +x .git/hooks/pre-commit
+```
+
+**Was er prüft:**
+- `CHANGELOG.md` hat einen `[Unreleased]`-Block
+- `README.md` hat einen Badge-Block in den ersten 10 Zeilen
+- Alle internen Markdown-Links sind auflösbar (via `D:\Entwicklung\scripts\audit-md-links.py`)
+- Alle Pilot-0.5.2-Pflicht-Files sind vorhanden
+- `.env.example` enthält keine verdächtigen Secret-artigen Werte
+- **Baustein-spezifisch (UI):** keine service-spezifische Logik in `src/` (Golden Rule)
+
+**Skip (NOT recommended):**
+```bash
+git commit --no-verify
+```
+
 ## Development Setup
 
 ```bash
@@ -36,6 +60,9 @@ pip install -r requirements-dev.txt    # falls vorhanden
 # 4. Pre-Commit-Hook installieren
 pip install pre-commit
 pre-commit install
+# ODER (Pilot 0.5.6 lokaler Spiegel des CI-Guards):
+cp scripts/git-hooks/pre-commit .git/hooks/pre-commit
+chmod +x .git/hooks/pre-commit
 
 # 5. Konfiguration
 cp .env.example .env

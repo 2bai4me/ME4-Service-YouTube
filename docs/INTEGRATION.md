@@ -58,26 +58,50 @@ live_status_stream, sm_producer_integration
 
 ## 4. Was wir bei Button-Klicks zurückgeben MÜSSEN
 
-### 4.1 Standard-Response: `_summary`-Envelope
+### 4.1 Standard-Response-Shape (Top-Level, kein Wrapper)
 
+Bei Button-Klicks liefern wir unsere Felder **direkt auf Top-Level** —
+**ohne** `_summary`-Wrapper. Das folgt der Industrie-Konvention (Google
+API Design Guide, Stripe API, GitHub API, OpenAPI Resource Style). Die
+UI ist tolerant gegenüber beiden Formen.
+
+**Live-Beispiel** (curl gegen den laufenden Service):
 ```json
 {
-  "_summary": {
-    "headline": { "success": true, "title": "...", "channel": "..." },
-    "function": "get-metadata",
-    "filesSavedTo": ["data/sessions/abc123/01-get-metadata/result.json"]
-  },
-  "data": { /* service-spezifische Daten */ }
+  "filesSavedTo": "data/sessions/abc123/01-get-metadata",
+  "jsonPath":     "data/sessions/abc123/01-get-metadata/result.json",
+  "mdPath":       "data/sessions/abc123/01-get-metadata/result.md",
+  "headline":     { "success": true, "title": "Me at the zoo", "channel": "jawed" },
+  "function":     "get-metadata"
 }
 ```
 
-**Implementierungs-Anker:**
-- `app/http_api.py:234` (`/api/metadata`)
-- `app/http_api.py:252` (`/api/transcript`)
-- `app/http_api.py:279` (`/api/comments`)
-- `app/http_api.py:304` (`/api/download`)
-- `app/http_api.py:170` (`/api/process`) — nutzt Worker-Pool
-- `app/http_api.py:343` (`/api/sm-produce`)
+**Pflichtfelder:**
+- `headline.success` (bool)
+- `headline` (object) — UI rendert das als Card-Header
+- `function` (string) — Funktions-ID (z.B. `get-metadata`, `get-transcript`, `process`)
+- `filesSavedTo` (string) — Pfad zum Ergebnis-Verzeichnis
+
+**Optional:** `jsonPath`, `mdPath`, `download_path`, `_persistence`,
+sowie beliebige **servicespezifische** Felder (z.B. `transcript_segments`,
+`comments_count` bei `process`). Diese sind dokumentations-pflichtig
+in `FUNCTIONS.md` §3.
+
+**Implementierungs-Anker** (`app/http_api.py`):
+- Z. 285 (`/api/metadata`) → Aufruf von `_summary("get-metadata", result)` Z. 300
+- Z. 302 (`/api/transcript`) → Aufruf Z. 327
+- Z. 328 (`/api/comments`) → Aufruf Z. 352
+- Z. 370 (`/api/download`) → Aufruf Z. 391
+- Z. 400 (`/api/process`) → nutzt Worker-Pool, ruft `_summary` indirekt
+- Z. 405 (`/api/sm-produce`) → Aufruf Z. 415
+
+Die Builder-Funktion `_summary(function_name, result)` in Z. 77 ist die
+Single Source of Truth für dieses Schema — **alle** Endpoints gehen
+durch sie.
+
+**Wichtig für 20+ Services:** Wenn neue Services dazukommen, MÜSSEN sie
+denselben Top-Level-Shape liefern. Siehe Pilot `D:\Entwicklung\ME4-SERVICE-BUS-PILOT.md`
+Sektion 0.9 (ADR-001) für die Begründung gegen einen Wrapper.
 
 ### 4.2 `awaitInput` bei fehlenden Pflichtfeldern
 
@@ -89,7 +113,7 @@ Statt HTTP 400 liefern wir bei fehlender URL ein `awaitInput`-Envelope (siehe `F
 
 | Status | Bedeutung | Beispiel |
 |---|---|---|
-| 200 + `_summary` | Erfolg | — |
+| 200 + Top-Level-Felder | Erfolg (mit `headline.success: true`) | — |
 | 200 + `awaitInput` | Pflichtfeld fehlt | URL nicht angegeben |
 | 400 | Validation-Error | `"Keine gueltige YouTube-URL"` |
 | 401/403 | Auth-Fehler | API-Key falsch oder fehlt |
@@ -121,11 +145,11 @@ data/sessions/<sid>/<NN-function>/
 ## 6. Stage-Update-Mechanik (aus UI-Sicht)
 
 Der Baustein erwartet nach erfolgreichem Klick, dass wir mindestens eines liefern:
-- `_summary.headline.success = true` → alle Stages in `btn.function` werden auf `ok` gesetzt
-- `_persistence.id` + `_persistence.json_path` → UI kann Session-Datei referenzieren
-- Bei `produces.kind="download"`: zusätzlich `file`-Feld im `_summary` mit Pfad in `DOWNLOAD_DIR`
+- `headline.success = true` (Top-Level) → alle Stages in `btn.function` werden auf `ok` gesetzt
+- `_persistence.id` + `_persistence.json_path` (Top-Level) → UI kann Session-Datei referenzieren
+- Bei `produces.kind="download"`: zusätzlich `file`-Feld (Top-Level) mit Pfad in `DOWNLOAD_DIR`
 
-Wir liefern das aktuell konsistent in `process` (Worker-Pool). Die anderen Slots (0–5) liefern ebenfalls `_summary` mit `headline.success`, aber **ohne** `file`-Feld — UI behandelt das als OK ohne Download-Check.
+Wir liefern das aktuell konsistent in `process` (Worker-Pool). Die anderen Slots (0–5) liefern ebenfalls Top-Level-Felder mit `headline.success`, aber **ohne** `file`-Feld — UI behandelt das als OK ohne Download-Check.
 
 ## 7. Was der Baustein von uns NICHT erwartet
 
@@ -140,7 +164,7 @@ Wir liefern das aktuell konsistent in `process` (Worker-Pool). Die anderen Slots
 |---|---|
 | `/api/manifest` Route | `app/http_api.py:142` |
 | `/api/process` Route (Worker-Pool) | `app/http_api.py:170` |
-| `_summary` Builder | `app/orchestrator.py:_build_summary` |
+| `_summary` Builder (Top-Level-Response) | `app/http_api.py:77` |
 | `awaitInput` für fehlende URL | `app/models.py` (`@field_validator("url")`) |
 | Auth HMAC-compare | `app/auth.py:23` |
 | ZMQ-Main Service | `app/zmq_service.py` |

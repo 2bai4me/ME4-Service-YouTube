@@ -30,15 +30,10 @@ class Settings(BaseSettings):
     loadbalancer_zmq_port: int = Field(default=5571, ge=0, le=65535)
 
     # === Lokale Daten-Verzeichnisse ===
-    # Default-Wurzel für Session-Daten (Notes.md + Funktions-Ergebnisse) UND
-    # für heruntergeladene Video-/Audio-Dateien. Per .env überschreibbar:
-    #   DATA_DIR=E:\Entwicklungen\ME4-YouTube\Bewegungsdaten
-    data_dir: str = Field(
-        default=r"E:\Entwicklungen\ME4-YouTube\Bewegungsdaten"
-    )
-    download_dir: str = Field(
-        default=r"E:\Entwicklungen\ME4-YouTube\Bewegungsdaten\downloads"
-    )
+    # Default-Wurzel für Session-Daten (Notes.md + Funktions-Ergebnisse).
+    # Plattform-portabel; per .env / Umgebungsvariable überschreibbar:
+    #   DATA_DIR=./data
+    data_dir: str = Field(default="./data")
 
     # === Auth ===
     api_key: str = Field(default="", description="API-Key, falls leer = offen (nur dev)")
@@ -54,6 +49,12 @@ class Settings(BaseSettings):
     host: str = "0.0.0.0"
 
     # === Download-Pfade ===
+    # Basis-Verzeichnis für Video-/Audio-Downloads. Plattform-portabel;
+    # per .env / Umgebungsvariable überschreibbar:
+    #   DOWNLOAD_DIR=./downloads
+    # Single source of truth: this declaration. (Earlier duplicate under
+    # "Lokale Daten-Verzeichnisse" was silently shadowed by pydantic and
+    # removed in commit fix(config): dedupe download_dir + portable data_dir.)
     download_dir: str = Field(default="./downloads", description="Basis-Verzeichnis für Downloads")
     max_download_size_mb: int = Field(default=500, ge=1, le=10240)
     download_timeout_sec: int = Field(default=300, ge=10, le=3600)

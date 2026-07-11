@@ -81,7 +81,7 @@ Die Button-Leiste wird vom **ME4-UI-Baustein** aus dem Service-Manifest (`GET /a
 4. Baustein ruft den HTTP-Endpoint mit `X-API-Key` (sofern in `.env` gesetzt).
 5. **Modal zeigt Loading-State** (Spinner auf Submit-Button, Modal bleibt offen).
 6. Response kommt zurück:
-   - **200 + `_summary`** → Modal zeigt **Ergebnis-Card** (`headline.success=true`, Titel, Kanal, …). Bei `process` zusätzlich: `download_path`, `transcript_segments`, `comments_count`, `_persistence.id`.
+   - **200 + Top-Level-Felder** → Modal zeigt **Ergebnis-Card** (`headline.success=true`, Titel, Kanal, …). Bei `process` zusätzlich: `download_path`, `transcript_segments`, `comments_count`, `_persistence.id`.
    - **200 + `awaitInput`** → Server hat Pflichtfeld vermisst; Modal **rendert sich neu** mit dem `awaitInput.fields`-Array als Eingabefelder (z. B. URL nachfragen).
    - **400** → Inline-Error im Modal: `"Keine gueltige YouTube-URL"` o. ä.
    - **500/502/503** → Modal zeigt Fehlertext + Schließen-Button; User kann erneut absenden.
@@ -119,13 +119,11 @@ Jede Funktion hat einen deklarativen Step-Flow (`functions[].steps` im Manifest)
 **Response (200):**
 ```json
 {
-  "_summary": {
-    "filesSavedTo": ["…/result.json", "…/result.md"],
-    "jsonPath": "…/result.json",
-    "mdPath":   "…/result.md",
-    "headline": { "success": true, "title": "…", "channel": "…", "duration_sec": 213, "view_count": 1234567 },
-    "function": "get-metadata"
-  }
+  "filesSavedTo": "data/sessions/abc123/01-get-metadata",
+  "jsonPath":     "data/sessions/abc123/01-get-metadata/result.json",
+  "mdPath":       "data/sessions/abc123/01-get-metadata/result.md",
+  "headline":     { "success": true, "title": "Me at the zoo", "channel": "jawed", "duration_sec": 19, "view_count": 290000000 },
+  "function":     "get-metadata"
 }
 ```
 
@@ -162,11 +160,11 @@ Jede Funktion hat einen deklarativen Step-Flow (`functions[].steps` im Manifest)
 **Response (200):**
 ```json
 {
-  "_summary": {
-    "filesSavedTo": ["…/result.json", "…/result.md"],
-    "headline": { "success": true, "video_id": "dQw4w9WgXcQ", "language": "de", "is_generated": true, "snippet_count": 412 },
-    "function": "get-transcript"
-  }
+  "filesSavedTo": "data/sessions/abc123/02-get-transcript",
+  "jsonPath":     "data/sessions/abc123/02-get-transcript/result.json",
+  "mdPath":       "data/sessions/abc123/02-get-transcript/result.md",
+  "headline":     { "success": true, "video_id": "jNQXAC9IVRw", "language": "de", "is_generated": true, "snippet_count": 12 },
+  "function":     "get-transcript"
 }
 ```
 
@@ -193,11 +191,11 @@ Jede Funktion hat einen deklarativen Step-Flow (`functions[].steps` im Manifest)
 **Response (200):**
 ```json
 {
-  "_summary": {
-    "filesSavedTo": ["…/result.json", "…/result.md"],
-    "headline": { "success": true, "video_id": "dQw4w9WgXcQ", "count": 100, "truncated": false },
-    "function": "get-comments"
-  }
+  "filesSavedTo": "data/sessions/abc123/03-get-comments",
+  "jsonPath":     "data/sessions/abc123/03-get-comments/result.json",
+  "mdPath":       "data/sessions/abc123/03-get-comments/result.md",
+  "headline":     { "success": true, "video_id": "jNQXAC9IVRw", "count": 100, "truncated": false },
+  "function":     "get-comments"
 }
 ```
 
@@ -225,12 +223,12 @@ Jede Funktion hat einen deklarativen Step-Flow (`functions[].steps` im Manifest)
 **Response (200):**
 ```json
 {
-  "_summary": {
-    "filesSavedTo": ["…/result.json"],
-    "file": "Rick Astley - Never Gonna Give You Up.mp4",
-    "headline": { "success": true, "title": "…", "duration_sec": 213, "size_mb": 12.4, "format_id": "18" },
-    "function": "download"
-  }
+  "filesSavedTo": "data/downloads",
+  "file":        "Me at the zoo.mp4",
+  "jsonPath":    null,
+  "mdPath":      null,
+  "headline":    { "success": true, "title": "Me at the zoo", "duration_sec": 19, "size_mb": 0.5, "format_id": "18" },
+  "function":    "download"
 }
 ```
 
@@ -316,7 +314,7 @@ Jede Funktion hat einen deklarativen Step-Flow (`functions[].steps` im Manifest)
 }
 ```
 
-**Response (200):** SM-Producer-Antwort, eingepackt in `_summary` mit `function: "trigger-sm-produce"`.
+**Response (200):** Top-Level-Response mit `function: "trigger-sm-produce"` (analog zum Schema in §4.1).
 **Fehler:** `502` wenn der SM-Producer nicht erreichbar ist.
 
 ---
@@ -406,7 +404,7 @@ Identisches REQ/REP-Protokoll, **reduzierte** Tool-Liste — leitet Jobs anhand 
 | `health` / `status` | – | Pool-Status (welche Worker laufen, Load-Verteilung) |
 | `process` | 🔑 | Volle Pipeline → an einen freien Worker (`Orchestrator.process`) |
 
-LB-Antwort ist die Worker-Antwort (kein eigenes `_summary`).
+LB-Antwort ist die Worker-Antwort (gleicher Top-Level-Schema, kein zusätzlicher Wrapper).
 
 ---
 

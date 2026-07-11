@@ -10,6 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Planned
 - `docs/INTEGRATION.md` — formaler UI↔Service-Vertrag (Pilot-Phase 5)
 - Removal der deklarierten aber nicht implementierten Slot-Routen 6–9 (vgl. `FUNCTIONS.md` §8)
+- Migration `./data/` → `./work/` gemäß Pilot-Sektion 0.6.8
 
 ## [1.0.0] - 2026-07-11
 

@@ -14,7 +14,6 @@ os.environ.setdefault("API_KEY", "test-key")
 os.environ.setdefault("WORKER_COUNT", "1")
 os.environ.setdefault("HTTP_PORT", "0")  # Random
 os.environ.setdefault("ZMQ_PORT", "0")
-os.environ.setdefault("WSSP15_PORT", "0")
 os.environ.setdefault("LOADBALANCER_ZMQ_PORT", "0")
 os.environ.setdefault("SM_PRODUCER_ENABLED", "false")
 os.environ.setdefault("LOG_LEVEL", "WARNING")

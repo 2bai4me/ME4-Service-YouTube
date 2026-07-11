@@ -28,29 +28,25 @@ Boot-Sequenz — er ist nicht optional.
             │  3. ZMQ-Loadbalancer :5571 │  ← MCP-konform
             └──────────┬─────────────────┘
                        ▼
-            ┌────────────────────────────┐
-            │  4. ZMQ-Hauptservice :5570 │  ← MCP-konform
-            └──────────┬─────────────────┘
-                       ▼
-            ┌────────────────────────────┐
-            │  5. WSSP-15 Heartbeat :5690│
-            └──────────┬─────────────────┘
-                       ▼
-            ┌────────────────────────────┐
-            │  6. HTTP-API + Framie :8770│  ← Framie-UI unter /ui/
-            └──────────┬─────────────────┘
-                       ▼
-            ┌────────────────────────────┐
-            │  7. SM-Producer testen     │  (non-blocking)
-            └──────────┬─────────────────┘
-                       ▼
-            ┌────────────────────────────┐
-            │  8. Framie im Browser      │  (wenn --no-browser nicht gesetzt)
-            └──────────┬─────────────────┘
-                       ▼
-            ┌────────────────────────────┐
-            │  ✅  SERVICE BEREIT        │
-            └────────────────────────────┘
+             ┌────────────────────────────┐
+             │  4. ZMQ-Hauptservice :5570 │  ← MCP-konform
+             └──────────┬─────────────────┘
+                        ▼
+             ┌────────────────────────────┐
+             │  5. HTTP-API + Framie :8770│  ← Framie-UI unter /ui/
+             └──────────┬─────────────────┘
+                        ▼
+             ┌────────────────────────────┐
+             │  6. SM-Producer testen     │  (non-blocking)
+             └──────────┬─────────────────┘
+                        ▼
+             ┌────────────────────────────┐
+             │  7. Framie im Browser      │  (wenn --no-browser nicht gesetzt)
+             └──────────┬─────────────────┘
+                        ▼
+             ┌────────────────────────────┐
+             │  ✅  SERVICE BEREIT        │
+             └────────────────────────────┘
 ```
 
 **Wichtig**: Wird der Service gestartet, startet automatisch auch
@@ -90,10 +86,9 @@ Beim Start MÜSSEN die Layer in dieser Reihenfolge initialisiert werden:
 2. **Worker-Pool** (app/loadbalancer.py → WorkerPool.start)
 3. **ZMQ-Loadbalancer** (app/loadbalancer.py → LoadBalancerZMQ.start)
 4. **ZMQ-Hauptservice** (app/zmq_service.py → ZMQService.start)
-5. **WSSP-15 Heartbeat** (wssp15/heartbeat_emitter.py)
-6. **HTTP-API + Framie** (app/http_api.py → build_app)
-7. **SM-Producer Anbindung** (app/sm_producer_client.py)
-8. **Framie-Browser-Öffnung** (webbrowser.open)
+5. **HTTP-API + Framie** (app/http_api.py → build_app)
+6. **SM-Producer Anbindung** (app/sm_producer_client.py)
+7. **Framie-Browser-Öffnung** (webbrowser.open)
 
 Diese Reihenfolge ist hartcodiert in `main.py` (Klasse `ServiceBootstrap.boot`)
 und darf nicht geändert werden ohne Absprache mit dem CIO.
@@ -174,11 +169,10 @@ LOADBALANCER_STRATEGY=least_loaded
 ### Reihenfolge (graceful)
 
 1. HTTP-Server: kein neuer Request
-2. WSSP-15: Heartbeat gestoppt
-3. ZMQ-Hauptservice: keine neuen Requests
-4. ZMQ-Loadbalancer: gestoppt
-5. Worker-Pool: alle Worker gestoppt
-6. Event-Loop: beendet
+2. ZMQ-Hauptservice: keine neuen Requests
+3. ZMQ-Loadbalancer: gestoppt
+4. Worker-Pool: alle Worker gestoppt
+5. Event-Loop: beendet
 
 ---
 
@@ -208,7 +202,7 @@ FROM python:3.11-slim
 WORKDIR /app
 COPY . .
 RUN pip install -r requirements.txt
-EXPOSE 8770 5570 5571 5690
+EXPOSE 8770 5570 5571
 CMD ["python", "main.py", "--no-browser"]
 ```
 

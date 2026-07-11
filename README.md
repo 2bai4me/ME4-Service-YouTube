@@ -11,7 +11,7 @@
 
 > **Service-ID:** `ME4-YOUTUBE`  
 > **Version:** 1.0.0  
-> **Schnittstellen:** MCP (stdio + ZMQ REQ/REP) + HTTP/REST + WSSP-15 + Framie-UI
+> **Schnittstellen:** MCP (stdio + ZMQ REQ/REP) + HTTP/REST + Framie-UI
 
 YouTube Content Extraction Service für die ME4-Suite:
 - **Download** — Video- und Audio-Download via `yt-dlp`
@@ -58,7 +58,6 @@ Beim Start öffnet sich automatisch die **Framie-UI** im Browser unter
 | **HTTP / REST** | `8770` | Browser, Menschen, externe Tools |
 | **ZMQ Main** | `5570` | MCP-Service-Endpoint |
 | **ZMQ Loadbalancer** | `5571` | MCP-Loadbalancer (parallele Worker) |
-| **WSSP-15** | `5690` | Heartbeat / Telemetrie |
 | **Worker-Pool** | `8771+` | N parallele Worker-Instanzen (default: 2) |
 
 ### MCP-Tools (ZMQ + stdio)
@@ -248,7 +247,6 @@ Wichtige Variablen:
 
 Konform zu [MCP_ZMQ_STANDARD.md](./MCP_ZMQ_STANDARD.md):
 - ZMQ REQ/REP mit JSON-RPC 2.0
-- WSSP-15 Heartbeat
 - API-Key Auth
 - UI-Manifest
 - Standard-Tools (`ping`, `get_manifest`, `health`, `shutdown`)
@@ -282,10 +280,10 @@ Konform zu [MCP_ZMQ_STANDARD.md](./MCP_ZMQ_STANDARD.md):
 │    │  :8771  │ │  :8772  │ │  :8773  │   Orchestrator)  │
 │    └─────────┘ └─────────┘ └─────────┘                  │
 │                                                          │
-│  ┌────────────────┐  ┌─────────────────┐                │
-│  │ WSSP-15 :5690  │  │  SM-Producer    │                │
-│  │  Heartbeat     │  │  HTTP :3001     │                │
-│  └────────────────┘  └─────────────────┘                │
+│  ┌────────────────┐                                        │
+│  │  SM-Producer   │                                        │
+│  │  HTTP :3001    │                                        │
+│  └────────────────┘                                        │
 └──────────────────────────────────────────────────────────┘
 ```
 

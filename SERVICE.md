@@ -2,7 +2,7 @@
 
 > **Service-ID:** `ME4-YOUTUBE`  
 > **Version:** 1.0.0  
-> **Status:** ✅ MCP + ZMQ + WSSP-15 + Framie konform  
+> **Status:** ✅ MCP + ZMQ + Framie konform  
 > **Standard:** [MCP_ZMQ_STANDARD.md](./MCP_ZMQ_STANDARD.md)
 
 ---
@@ -17,11 +17,10 @@ Load-Balancer für parallele Verarbeitung.
 | Eigenschaft | Wert |
 |---|---|
 | **Service-ID** | `ME4-YOUTUBE` |
-| **Typ** | MCP-Server (stdio + ZMQ) + HTTP + WSSP-15 + Framie |
+| **Typ** | MCP-Server (stdio + ZMQ) + HTTP + Framie |
 | **HTTP-Port** | 8770 |
 | **ZMQ-Port (Main)** | 5570 |
 | **ZMQ-Port (Loadbalancer)** | 5571 |
-| **WSSP-15 Port** | 5690 |
 | **Worker-Pool** | 2 (konfigurierbar) auf 8771+ |
 | **Auth** | API-Key (`X-API-Key` / `api_key`) |
 | **Sprache** | Python 3.11+ |
@@ -58,10 +57,10 @@ Load-Balancer für parallele Verarbeitung.
 │    │  HTTP   │ │  HTTP   │ │  HTTP   │                  │
 │    └─────────┘ └─────────┘ └─────────┘                  │
 │                                                          │
-│  ┌────────────────┐  ┌─────────────────┐                │
-│  │ WSSP-15 :5690  │  │  SM-Producer    │                │
-│  │  Heartbeat     │  │  HTTP :3001     │                │
-│  └────────────────┘  └─────────────────┘                │
+│  ┌────────────────┐                                        │
+│  │  SM-Producer   │                                        │
+│  │  HTTP :3001    │                                        │
+│  └────────────────┘                                        │
 │                                                          │
 │  ┌────────────────────────────┐                         │
 │  │  Framie-UI (static)        │                         │
@@ -100,10 +99,9 @@ Load-Balancer für parallele Verarbeitung.
 2. **Worker-Pool** aufbauen (N Worker auf eigenen Ports)
 3. **ZMQ-Loadbalancer** starten (Port 5571) — MCP-konform
 4. **ZMQ-Hauptservice** starten (Port 5570) — MCP-konform
-5. **WSSP-15 Heartbeat** starten (Port 5690)
-6. **HTTP-API + Framie-UI** starten (Port 8770)
-7. **SM-Producer** Anbindung testen (non-blocking)
-8. **Framie-UI** im Browser öffnen (wenn `--no-browser` nicht gesetzt)
+5. **HTTP-API + Framie-UI** starten (Port 8770)
+6. **SM-Producer** Anbindung testen (non-blocking)
+7. **Framie-UI** im Browser öffnen (wenn `--no-browser` nicht gesetzt)
 
 Siehe [SERVICE_START.md](./SERVICE_START.md) für Details.
 
@@ -148,17 +146,13 @@ Tools:
 
 Siehe [README.md](./README.md) für Endpunkte.
 
-### 4. WSSP-15 (Port 5690)
-
-WebSocket-Heartbeat für Cockpit / Service-Discovery.
-
-### 5. MCP stdio (für Agenten ohne ZMQ)
+### 4. MCP stdio (für Agenten ohne ZMQ)
 
 `python main.py --mcp-stdio`
 
 Liest JSON-RPC 2.0 von stdin, schreibt nach stdout.
 
-### 6. Framie-UI (Port 8770/ui)
+### 5. Framie-UI (Port 8770/ui)
 
 Embedded HTML/JS Status-Display.
 Wird beim Service-Start automatisch im Browser geöffnet
@@ -183,7 +177,6 @@ Siehe [`.env.example`](.env.example) für alle Optionen.
 | `HTTP_PORT` | `8770` | HTTP-API + Framie-UI |
 | `ZMQ_PORT` | `5570` | ZMQ Main |
 | `LOADBALANCER_ZMQ_PORT` | `5571` | ZMQ Loadbalancer |
-| `WSSP15_PORT` | `5690` | WSSP-15 Heartbeat |
 | `WORKER_COUNT` | `2` | Anzahl paralleler Worker |
 | `WORKER_BASE_PORT` | `8771` | Basis-Port für Worker |
 | `LOADBALANCER_STRATEGY` | `least_loaded` | `round_robin` / `least_loaded` / `random` |
@@ -199,7 +192,6 @@ Siehe [`.env.example`](.env.example) für alle Optionen.
 - [x] ZMQ REQ/REP mit JSON-RPC 2.0 (Hauptservice + Loadbalancer)
 - [x] `tools/list` und `tools/call` unterstützt
 - [x] API-Key Auth (HMAC-compare, constant-time)
-- [x] WSSP-15 Heartbeat aktiv
 - [x] Service-ID und Version definiert (`ME4-YOUTUBE` v1.0.0)
 - [x] UI-Manifest für Cockpit (`/api/manifest`)
 - [x] `ping`, `get_manifest`, `health`, `shutdown` Tools

@@ -1,0 +1,22 @@
+# CODEOWNERS — wer reviewed was
+# Syntax: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+# Letzte Zeile gewinnt bei Mehrfach-Match.
+
+# Default: Maintainer für alles
+*                           @uwean
+
+# Sicherheits-kritisch: zusätzliche Review
+/SECURITY.md                @uwean
+/app/auth.py                @uwean
+/app/zmq_service.py         @uwean
+
+# Service-Definition & Vertrag
+/app/http_api.py            @uwean
+/docs/INTEGRATION.md        @uwean
+/FUNCTIONS.md               @uwean
+/services/                  @uwean
+
+# Pilot-Standards
+/CHANGELOG.md               @uwean
+/.editorconfig              @uwean
+/.gitattributes             @uwean

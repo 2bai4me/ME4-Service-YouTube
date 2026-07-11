@@ -1,0 +1,142 @@
+name: docs-lint
+
+# Verbindlich: Pilot 0.5.6 Verifizierbarkeit — Phase-5.1-Vorstufe.
+# Prüft die Doku-Struktur und Cross-Links gegen die in
+# D:\Entwicklung\ME4-SERVICE-BUS-PILOT.md Sektion 0.5 definierten Regeln.
+#
+# Lokal testen:
+#   python D:\Entwicklung\scripts\audit-md-links.py <repo-path>
+#
+# Bewusst NICHT in npm/pytest-Suite eingebunden, weil Doku-Änderungen
+# unabhängig von Code-Änderungen PR-fähig sein sollen.
+
+on:
+  pull_request:
+    paths:
+      - '**.md'
+      - 'docs/**'
+      - '.gitattributes'
+      - '.editorconfig'
+      - 'CODEOWNERS'
+      - '.github/**'
+  push:
+    branches: [main]
+    paths:
+      - '**.md'
+      - 'docs/**'
+
+jobs:
+  audit-internal-links:
+    name: Audit internal Markdown links
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Run link audit
+        run: |
+          # Inline-Kopie des Pilot-Skripts (Audit-Skript liegt in
+          # D:\Entwicklung\scripts\, ist aber nicht in diesem Repo).
+          # Bei Phase-5.1-Veröffentlichlichung wird das Skript in
+          # ein eigenes Tooling-Repo ausgelagert.
+          python -c "
+          import os, re, sys
+          def audit(path):
+              broken = []
+              EXCLUDES = {'node_modules', '.venv', '.git', 'dist', 'build', '.next', 'coverage'}
+              for root, dirs, files in os.walk(path):
+                  dirs[:] = [d for d in dirs if d not in EXCLUDES]
+                  for f in files:
+                      if not f.endswith('.md'):
+                          continue
+                      full = os.path.join(root, f)
+                      rel = os.path.relpath(full, path).replace('\\\\', '/')
+                      try:
+                          content = open(full, encoding='utf-8').read()
+                      except Exception:
+                          continue
+                      for m in re.finditer(r'\]\(([^)\s#]+)(?:#[^)]*)?(?:\s+\"[^\"]*\")?\)', content):
+                          target = m.group(1)
+                          if target.startswith(('http://', 'https://', 'mailto:', 'D:')):
+                              continue
+                          if target.startswith('#'):
+                              continue
+                          base = os.path.dirname(rel)
+                          resolved = os.path.normpath(os.path.join(base, target)).replace('\\\\', '/')
+                          if not os.path.exists(os.path.join(path, resolved)):
+                              broken.append(f'  ❌ TOT in {rel}: {target}')
+              return broken
+          issues = audit('.')
+          if issues:
+              print('Broken internal Markdown links found:')
+              for i in issues:
+                  print(i)
+              sys.exit(1)
+          print('✅ All internal Markdown links resolve')
+          "
+
+  required-files:
+    name: Check required doc files (Pilot 0.5.2)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify Pilot 0.5.2 file presence
+        run: |
+          REQUIRED=(
+            README.md
+            LICENSE
+            .env.example
+            CHANGELOG.md
+            AGENT.md
+            SERVICE.md
+            FUNCTIONS.md
+            SERVICE_START.md
+            ARCHITECTURE.md
+            docs/INTEGRATION.md
+            CONTRIBUTING.md
+            SECURITY.md
+            .editorconfig
+            .gitattributes
+            CODEOWNERS
+          )
+          MISSING=()
+          for f in "${REQUIRED[@]}"; do
+            if [ ! -f "$f" ]; then
+              MISSING+=("$f")
+            fi
+          done
+          if [ ${#MISSING[@]} -gt 0 ]; then
+            echo "❌ Missing required files (Pilot 0.5.2):"
+            for m in "${MISSING[@]}"; do
+              echo "  - $m"
+            done
+            exit 1
+          fi
+          echo "✅ All required Pilot 0.5.2 files present (${#REQUIRED[@]})"
+
+  badges-top-ten:
+    name: Check README badge block in first 10 lines (Pilot 0.2)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify badge block
+        run: |
+          # Badges in Markdown haben die Form [![...](...)](...)
+          # Erste 10 Zeilen MÜSSEN mindestens ein Badge enthalten.
+          head -10 README.md | grep -q '!\[.*\](.*shields.io\|.*badge' \
+            && echo "✅ Badge block found in first 10 lines of README.md" \
+            || (echo "❌ No badge block in first 10 lines of README.md"; exit 1)
+
+  changelog-has-entry:
+    name: Check CHANGELOG.md has [Unreleased] or current version block
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify CHANGELOG.md structure
+        run: |
+          grep -q '^## \[Unreleased\]' CHANGELOG.md \
+            && echo "✅ CHANGELOG.md has [Unreleased] block" \
+            || (echo "❌ CHANGELOG.md missing [Unreleased] block (Pilot 0.5.3)"; exit 1)

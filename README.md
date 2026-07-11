@@ -314,5 +314,11 @@ Jeder Worker hat:
 - [`docs/INTEGRATION.md`](docs/INTEGRATION.md) — UI↔Service-Vertrag (Pilot-Phase 5)
 - [`CHANGELOG.md`](CHANGELOG.md) — Versionierte Änderungshistorie (Keep-a-Changelog 1.1)
 - [`LICENSE`](LICENSE) — MIT
+- [`CONTRIBUTING.md`](CONTRIBUTING.md) — wie du beitragen kannst
+- [`SECURITY.md`](SECURITY.md) — Sicherheitslücken melden
+- [`CODEOWNERS`](CODEOWNERS) — Review-Verantwortlichkeiten
+- [`.editorconfig`](.editorconfig) / [`.gitattributes`](.gitattributes) — Code- und Whitespace-Standards
+- [`.github/ISSUE_TEMPLATE/`](.github/ISSUE_TEMPLATE/) — strukturierte Bug-Reports, Feature-Requests, Docs-Issues
+- [`.github/workflows/docs-lint.yml`](.github/workflows/docs-lint.yml) — CI-Guard gegen Pilot-0.5-Verstöße
 
 Pilot-Standards: `D:\Entwicklung\ME4-SERVICE-BUS-PILOT.md` Sektion 0.5 (Dokumentations-Pflichtstruktur).

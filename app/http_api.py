@@ -141,7 +141,57 @@ def build_app(pool: WorkerPool, zmq_service: ZMQService) -> FastAPI:
 
     @app.get("/api/manifest")
     async def manifest():
-        return zmq_service._manifest()
+        """Service-Manifest - Union aus Baustein-Manifest (UI) und Service-Bus-Manifest (Gateway).
+
+        Phase 2.2: Erweitert um den Service-Bus-Standard-4/7-Block (name/version/capabilities/endpoints),
+        damit das Gateway ueber /api/manifest ein vollwertiges Bus-Manifest bekommt, das im
+        Heartbeat-Body mitgesendet werden kann.
+        """
+        base_url = f"http://localhost:{settings.http_port}"
+        baustein = zmq_service._manifest()
+        bus_manifest = {
+            "name": "me4-youtube",
+            "service_id": settings.service_id,
+            "version": settings.service_version,
+            "type": "service",
+            "capabilities": [
+                "youtube-metadata",
+                "transcript",
+                "download",
+                "comments",
+                "sm-producer-trigger",
+                "process-pipeline",
+            ],
+            "endpoints": {
+                "health": f"{base_url}/api/health",
+                "manifest": f"{base_url}/api/manifest",
+                "metadata": f"{base_url}/api/metadata",
+                "transcript": f"{base_url}/api/transcript",
+                "comments": f"{base_url}/api/comments",
+                "download": f"{base_url}/api/download",
+                "process": f"{base_url}/api/process",
+                "sm_produce": f"{base_url}/api/sm-produce",
+                "status": f"{base_url}/api/status",
+                "results": f"{base_url}/api/results",
+            },
+            "metadata": {
+                "framework": "FastAPI",
+                "language": "Python",
+                "version": settings.service_version,
+                "conforms_to": "ME4-Service-Bus-Standard-v1.0",
+            },
+            "health_metrics": [
+                "cpu_percent",
+                "memory_percent",
+                "active_requests",
+                "avg_latency_ms",
+                "error_rate",
+            ],
+        }
+        return {
+            "service_bus_manifest": bus_manifest,
+            "baustein_manifest": baustein,
+        }
 
     @app.get("/api/status")
     async def status():

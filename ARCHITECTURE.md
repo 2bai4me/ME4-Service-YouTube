@@ -241,7 +241,7 @@ services:
 
 ### Systemd
 
-Siehe [SERVICE_START.md §8](../SERVICE_START.md#8-deployment).
+Siehe [`SERVICE_START.md` § 10 Deployment](SERVICE_START.md#10-deployment).
 
 ---
 

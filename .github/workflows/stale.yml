@@ -1,0 +1,39 @@
+name: Stale Bot
+
+# Pilot 0.8.9: Issues/PRs nach 30 Tagen Inaktivität als stale markieren,
+# nach weiteren 7 Tagen schließen. Ausnahmen: security, breaking-change, pinned.
+#
+# Refs:
+#   https://github.com/actions/stale
+
+on:
+  schedule:
+    - cron: '0 8 * * 1-5'   # Mo-Fr 08:00 UTC
+
+jobs:
+  stale:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/stale@v9
+        with:
+          days-before-stale: 30
+          days-before-close: 7
+          stale-issue-label: 'stale'
+          exempt-issue-labels: 'security,breaking-change,pinned,needs-triage'
+          exempt-pr-labels: 'security,breaking-change,pinned'
+          stale-issue-message: |
+            🕐 Dieses Issue hat seit 30 Tagen keine Aktivität mehr.
+            Es wird in 7 Tagen automatisch geschlossen, falls bis dahin keine Antwort kommt.
+            Falls weiterhin relevant: bitte einen Kommentar hinterlassen.
+          stale-pr-message: |
+            🕐 Dieser PR hat seit 30 Tagen keine Aktivität mehr.
+            Er wird in 7 Tagen automatisch geschlossen, falls bis dahin keine Antwort kommt.
+          close-issue-message: |
+            🔒 Dieses Issue wurde nach 37 Tagen Inaktivität geschlossen.
+            Falls weiterhin relevant: bitte einen neuen Issue öffnen und auf diesen hier referenzieren.
+          close-pr-message: |
+            🔒 Dieser PR wurde nach 37 Tagen Inaktivität geschlossen.
+            Falls die Änderungen noch relevant sind: bitte einen neuen PR öffnen.

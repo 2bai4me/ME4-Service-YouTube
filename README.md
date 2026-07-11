@@ -320,6 +320,8 @@ Jeder Worker hat:
 - [`CODEOWNERS`](CODEOWNERS) — Review-Verantwortlichkeiten
 - [`.editorconfig`](.editorconfig) / [`.gitattributes`](.gitattributes) — Code- und Whitespace-Standards
 - [`.github/ISSUE_TEMPLATE/`](.github/ISSUE_TEMPLATE/) — strukturierte Bug-Reports, Feature-Requests, Docs-Issues
+- [`.github/pull_request_template.md`](.github/pull_request_template.md) — Pilot-0.8.5-konformes PR-Template
 - [`.github/workflows/docs-lint.yml`](.github/workflows/docs-lint.yml) — CI-Guard gegen Pilot-0.5-Verstöße
+- [`.github/workflows/stale.yml`](.github/workflows/stale.yml) — Auto-Stale-Bot (Pilot 0.8.9)
 
-Pilot-Standards: `D:\Entwicklung\ME4-SERVICE-BUS-PILOT.md` Sektion 0.5 (Dokumentations-Pflichtstruktur).
+Pilot-Standards: `D:\Entwicklung\ME4-SERVICE-BUS-PILOT.md` Sektion 0.5 (Doku-Pflichtstruktur) + 0.6 (Verzeichnis-Layout — Migration von `./data/` zu `./work/` für Phase 5.1 geplant).

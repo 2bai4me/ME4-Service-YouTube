@@ -385,7 +385,7 @@ class TestYT08_06_FilesListMatchesFilesystem:
 
         # Jedes gemeldete File hat Pflicht-Felder name/size/mtimeMs.
         for f in s["files"]:
-            assert set(f.keys()) == {"name", "size", "mtimeMs"}
+            assert set(f.keys()) == {"name", "size", "mtimeMs", "path", "openUrl"}
             real = d / f["name"]
             assert real.exists()
             assert f["size"] == real.stat().st_size

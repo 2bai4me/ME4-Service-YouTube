@@ -104,6 +104,71 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   ``data["service_bus_manifest"]["service_id"]`` -- nicht in Phase-4-Scope,
   vor Phase 2.2 manifest-refactor bereits divergent).
 
+## [1.0.7] - 2026-07-13
+
+### Added
+- **Pfad-Translation WSL/Linux -> Windows-UI**: Neue Helper-Funktion
+  ``app/path_utils.to_platform_path(p, *, windows=None)`` uebersetzt
+  Pfade, die mit ``/mnt/<drive>/`` beginnen, in die Windows-Form
+  ``<DRIVE>:\<rest-mit-Backslashes>``, sobald das neue Setting
+  ``settings.windows_path_translation=True`` gesetzt ist (oder der
+  explizite ``windows=True``-Override greift).  Pfade ohne
+  ``/mnt/<drive>/``-Prefix (z.B. ``/tmp/...``) bleiben unveraendert in
+  POSIX-Form -- das Windows-Browser-UI kann sie ohnehin nicht oeffnen,
+  eine Doppel-Anzeige wuerde nur verwirren.
+- **Neue Setting ``windows_path_translation``** in ``app/config.py``
+  (Default: ``False``, Linux-natives Format).  Aktivierbar per
+  Env-Variable ``WINDOWS_PATH_TRANSLATION=true`` oder in ``.env``.  Die
+  Translation greift fuer alle 6 Pfad-Felder des Response-Contracts:
+  ``dirAbsolute``, ``filesSavedTo``, ``resultsDir``, ``sessionDir``,
+  ``jsonPath``, ``mdPath``, ``htmlPath``.
+- **``files[]``-Erweiterung um ``path`` + ``openUrl``**: Jeder Eintrag
+  in ``files[]`` hat jetzt zusaetzlich zu ``{name, size, mtimeMs}``
+  ein ``path``-Feld (gleiche Translation wie ``dirAbsolute``, z.B.
+  ``D:\DEV\wt-me4-yt-paths-open\data\sessions\<sid>\results\
+  <sid>.<NN>result.html``) und ein ``openUrl``-Feld
+  (``file:///D:/DEV/...``-URI fuer direkten Browser-Open).  Damit kann
+  die UI einen anklickbaren "Oeffnen"-Button rendern.
+- **Neuer Helper ``to_file_uri(path_str)``** in ``app/path_utils.py``
+  konvertiert einen beliebigen Pfad-String (POSIX oder Windows-Form)
+  in eine gueltige ``file://``-URI (drei Slashes fuer absolute Windows-
+  Pfade mit Drive-Letter, zwei Slashes fuer absolute POSIX-Pfade).
+- **Neue Test-Datei ``tests/test_phase4b_paths.py``** (12 Tests,
+  3 Klassen): Translation an/aus, WSL- vs non-WSL-Pfade,
+  Nested-Subdirs, plus Vertragspflicht-Tests fuer ``files[].path`` /
+  ``files[].openUrl``.
+
+### Changed
+- **Pfad-Generierung nutzt jetzt den Helper**: ``app/session_store.to_windows_url``
+  ist jetzt ein Backward-Compat-Shim, der an ``to_platform_path``
+  delegiert (mit ``windows=None``, also Setting-getrieben).  Der bisherige
+  ``return Path(path).resolve().as_posix()``-Body wurde ersetzt -- damit
+  greift die Translation auch fuer den ``result.jsonPath`` /
+  ``result.mdPath`` / ``result.htmlPath``-Annotator in ``write_result``
+  (Phase-4-Write-Pfad), ohne dass der Annotator geaendert werden musste.
+- **``app/response_contract.build_summary``** ruft jetzt ``to_platform_path``
+  statt ``to_windows_url`` fuer die 6 Top-Level-Pfad-Felder (semantisch
+  identisch via Setting, aber klarer im Code-Review).
+- **``app/response_contract.list_resultset_files``** setzt jetzt
+  zusaetzlich ``path`` und ``openUrl`` pro File-Eintrag.
+- **Version-Spiegel**: 5 Spiegelorte + ``tests/test_config.py``
+  konsistent auf ``1.0.7`` (pyproject.toml, app/__init__.py,
+  app/config.py, services/me4-youtube.service.json, CHANGELOG.md,
+  test_config.test_defaults).
+
+### Notes
+- Verifikation: ``pytest tests/`` -> 134 passed (122 Baseline + 12 neu),
+  2 pre-existing failed (manifest-tests, dokumentiert in 1.0.6-Notes).
+- Out-of-Scope-Reminder:
+  * ``data_dir`` -> ``WORK_DIR``-Migration (Spec E-3, separates Issue;
+    aktuell schreibt der Service nach ``./data/sessions/`` statt
+    ``./work/sessions/``).
+  * UI-04 Strict Validation + "Oeffnen"-Button-Rendering (UI-Code,
+    Phase 5; die neuen Felder sind transportiert, aber die UI muss sie
+    noch rendern).
+- Vollstaendige Suite inkl. Phase-4-Regression-Check:
+  ``pytest tests/ -v 2>&1 | tail -40``.
+
 ## [Unreleased]
 
 ### Fixed

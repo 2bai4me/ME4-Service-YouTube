@@ -14,7 +14,10 @@ Vertrag (Spec Top-Level-Response + YT-03):
       drei kanonischen Resultset-Dateien ``<sid>.<NN>result.{ext}``.
     * ``files``: echtes Listing des Resultsets, gefiltert per
       ``_RESULT_RE`` auf das aktuelle ``NN`` (kein ``Notes.md``, keine
-      Verzeichnisse, keine Vorgenger-Resultsets).
+      Verzeichnisse, keine Vorgenger-Resultsets).  Phase 4b: jedes
+      Element hat zusaetzlich ``path`` (platform-uebersetzt, gleiche
+      Settings wie ``dirAbsolute``) und ``openUrl`` (``file:///...``-URI
+      fuer direkten Browser-Open).
     * ``listingError``: ``None`` oder Fehler-String.
     * ``headline`` / ``function``: wie bisher.
 """
@@ -23,12 +26,12 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from app.path_utils import to_file_uri, to_platform_path
 from app.session_store import (
     _RESULT_RE,
     get_results_dir,
     get_session_dir,
     next_function_index,
-    to_windows_url,
 )
 
 
@@ -111,10 +114,20 @@ def list_resultset_files(results_dir_native, session_id, nn):
             st = p.stat()
         except OSError:
             continue
+        # Phase 4b: add ``path`` (platform-translated) and ``openUrl``
+        # (file:// URI for browser-open).  ``path`` follows the same
+        # settings.windows_path_translation rules as ``dirAbsolute`` so
+        # a single toggle flips the whole UI between Linux-native and
+        # Windows-native display.  ``openUrl`` is always set (even for
+        # non-HTML files) so the user can choose to open JSON or MD in
+        # the browser if desired.
+        file_path_str = to_platform_path(p)
         files.append({
             "name": p.name,
             "size": st.st_size,
             "mtimeMs": int(st.st_mtime * 1000),
+            "path": file_path_str,
+            "openUrl": to_file_uri(file_path_str),
         })
     return files, None
 
@@ -131,7 +144,9 @@ def build_summary(function_name, result, session_id=""):
       - ``jsonPath`` / ``mdPath`` / ``htmlPath``: absolute Pfade zu den
         drei kanonischen Resultset-Dateien ``<sid>.<NN>result.{ext}``.
       - ``files``: echtes Listing des Resultsets, gefiltert per
-        ``_RESULT_RE`` auf das aktuelle ``NN``.
+        ``_RESULT_RE`` auf das aktuelle ``NN``.  Phase 4b: jedes Element
+        hat zusaetzlich ``path`` (platform-uebersetzt via
+        ``to_platform_path``) und ``openUrl`` (``file:///...``-URI).
       - ``listingError``: ``None`` oder Fehler-String.
       - ``headline`` / ``function``: wie bisher.
 
@@ -193,14 +208,18 @@ def build_summary(function_name, result, session_id=""):
 
     # --- Top-Level Response
     if results_dir_native is not None and nn is not None:
-        dir_absolute_str = to_windows_url(results_dir_native)
-        json_path_str = to_windows_url(
+        # Phase 4b: use to_platform_path so ``settings.windows_path_translation``
+        # rewrites WSL ``/mnt/<drive>/...`` mounts to ``<DRIVE>:\...`` for
+        # the Windows-Browser UI.  Without the setting (default) the result
+        # is identical to the old ``to_windows_url`` behavior.
+        dir_absolute_str = to_platform_path(results_dir_native)
+        json_path_str = to_platform_path(
             results_dir_native / f"{session_id}.{nn}result.json"
         )
-        md_path_str = to_windows_url(
+        md_path_str = to_platform_path(
             results_dir_native / f"{session_id}.{nn}result.md"
         )
-        html_path_str = to_windows_url(
+        html_path_str = to_platform_path(
             results_dir_native / f"{session_id}.{nn}result.html"
         )
     else:
@@ -210,7 +229,7 @@ def build_summary(function_name, result, session_id=""):
         html_path_str = None
 
     session_dir_str = (
-        to_windows_url(session_dir_native)
+        to_platform_path(session_dir_native)
         if session_dir_native is not None
         else None
     )

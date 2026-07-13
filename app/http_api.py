@@ -30,6 +30,7 @@ from app.config import settings
 from app.loadbalancer import WorkerPool
 from app.logging_config import get_logger
 from app.models import ProcessRequest
+from app.response_contract import build_summary as _summary_build
 from app.session_store import write_result
 from app.status_tracker import status_tracker
 from app.zmq_service import ZMQService
@@ -74,28 +75,16 @@ def _needs_url(req: dict[str, Any]) -> bool:
     return not extract_video_id(url)
 
 
-def _summary(function_name: str, result: dict[str, Any]) -> dict[str, Any]:
-    """Build a compact response for the Baustein chat notification.
+def _summary(function_name: str, result: dict, session_id: str = "") -> dict:
+    """Thin FastAPI-freundlicher Wrapper um ``build_summary``.
 
-    Returns only:
-      - the directory the result was saved into
-      - a one-line human summary
-      - a couple of headline fields the user might want to glance at
-    The full result lives in <dir>/result.json and <dir>/result.md.
+    Vollstaendige Implementierung lebt in ``app.response_contract``
+    (kein FastAPI-Import, daher isoliert testbar).  Der Wrapper
+    haelt die existierende Aufruf-Signatur der HTTP-Endpoints stabil
+    (positional ``function_name`` + ``result`` plus neues Keyword
+    ``session_id``).
     """
-    func_dir = result.get("_dir", "")
-    headline = {
-        k: v for k, v in result.items()
-        if k in {"success", "title", "channel", "snippet_count", "count", "file"}
-        and v not in (None, "", [])
-    }
-    return {
-        "filesSavedTo": func_dir,
-        "jsonPath": str(Path(func_dir) / "result.json") if func_dir else None,
-        "mdPath": str(Path(func_dir) / "result.md") if func_dir else None,
-        "headline": headline,
-        "function": function_name,
-    }
+    return _summary_build(function_name, result, session_id)
 
 
 # ---------------------------------------------------------------------------
@@ -297,7 +286,7 @@ def build_app(pool: WorkerPool, zmq_service: ZMQService) -> FastAPI:
             raise HTTPException(status_code=400, detail=str(e))
         sid = req.get("sessionId") or ""
         result = write_result(sid, "get-metadata", result, request=req)
-        return _summary("get-metadata", result)
+        return _summary("get-metadata", result, session_id=sid)
 
     @app.post("/api/transcript", dependencies=[Depends(verify_http_key)])
     async def transcript(req: dict[str, Any]):
@@ -324,7 +313,7 @@ def build_app(pool: WorkerPool, zmq_service: ZMQService) -> FastAPI:
             raise HTTPException(status_code=400, detail=str(e))
         sid = req.get("sessionId") or ""
         result = write_result(sid, "get-transcript", result, request=req)
-        return _summary("get-transcript", result)
+        return _summary("get-transcript", result, session_id=sid)
 
     @app.post("/api/comments", dependencies=[Depends(verify_http_key)])
     async def comments(req: dict[str, Any]):
@@ -349,7 +338,7 @@ def build_app(pool: WorkerPool, zmq_service: ZMQService) -> FastAPI:
             raise HTTPException(status_code=400, detail=str(e))
         sid = req.get("sessionId") or ""
         result = write_result(sid, "get-comments", result, request=req)
-        return _summary("get-comments", result)
+        return _summary("get-comments", result, session_id=sid)
 
     @app.post("/api/download", dependencies=[Depends(verify_http_key)])
     async def download(req: dict[str, Any]):
@@ -388,7 +377,7 @@ def build_app(pool: WorkerPool, zmq_service: ZMQService) -> FastAPI:
             raise HTTPException(status_code=500, detail=str(e))
         sid = req.get("sessionId") or ""
         result = write_result(sid, "download", result, request=req)
-        return _summary("download", result)
+        return _summary("download", result, session_id=sid)
 
     @app.post("/api/sm-produce", dependencies=[Depends(verify_http_key)])
     async def sm_produce(req: dict[str, Any]):
@@ -412,7 +401,7 @@ def build_app(pool: WorkerPool, zmq_service: ZMQService) -> FastAPI:
             raise HTTPException(status_code=502, detail=f"SM-Producer: {e}")
         sid = req.get("sessionId") or ""
         result = write_result(sid, "trigger-sm-produce", result, request=req)
-        return _summary("trigger-sm-produce", result)
+        return _summary("trigger-sm-produce", result, session_id=sid)
 
     # Framie-UI statisch ausliefern
     try:

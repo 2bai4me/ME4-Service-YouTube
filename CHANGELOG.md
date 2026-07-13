@@ -18,3 +18,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   in `tests/test_seq_parser.py` deckt den Kern-Befund ab (zwei
   Aufrufe → `.01` und `.02`, keine Überschreibung).  Service-Version
   1.0.0 → 1.0.4.
+- `fix(service): correct _summary directory fields (Phase 2 / F-03, F-04)` —
+  `_summary` lieferte bisher `filesSavedTo` aus `result._dir`, was auf den
+  Per-Function-Subdir (`<session>/<NN-function>/`) zeigte — nicht auf das
+  kanonische Results-Verzeichnis `<session>/results/`.  Vertrags-Korrektur:
+    * `dirAbsolute` und `filesSavedTo` zeigen jetzt beide auf
+      `<session>/results/` (Windows-URL-Form: absolut, forward-slashes,
+      kein `file://`).
+    * Neuer Legacy-Alias `resultsDir` (identisch zu `dirAbsolute`) plus
+      optionales `sessionDir` für UI-Tests.
+    * Neues Pflicht-Feld `files[]` mit `{name, size, mtimeMs}`, gefiltert
+      per Regex `^[sid]\.(\d{2})result\.(json|md|html)$` auf das aktuelle
+      Resultset (`<sid>.<NN>result.{ext}`).  `Notes.md`, Verzeichnisse
+      und Vorgänger-Resultsets werden ausgeschlossen.
+    * Neue Felder `jsonPath` / `mdPath` / `htmlPath` als absolute Pfade
+      zu den drei konkreten Dateien des aktuellen Resultsets.
+    * Neues Feld `listingError` (optional, `None` bei OK).
+  Implementierung in neuem Modul `app/response_contract.py` (kein
+  FastAPI-Import, isoliert testbar).  `app/http_api.py` hält nur noch
+  einen dünnen Wrapper.  Neuer Helper `to_windows_url(Path)` in
+  `app/session_store.py` für die Pfad-Konvertierung.  Drei neue
+  pytest-Tests in `tests/test_dir_contract.py` (21 Asserts), inkl.
+  Regressionstest „sequenzielle Resultsets überschreiben sich nicht".
+  NB-3-Konformität: `next_function_index` wird nur als Fallback für die
+  Pfad-Felder benutzt; sein String-Rückgabewert wird nie
+  re-formatiert (`f"{nn:02d}"` würde „0105" liefern).
+  Service-Version 1.0.4 → 1.0.5.
+

@@ -162,6 +162,27 @@ def next_function_index(session_id: str) -> str:
     return f"{max_idx + 1:02d}"
 
 
+def to_windows_url(path: Path | str) -> str:
+    """Convert a Path to Windows-URL form for transport to UI clients.
+
+    Format: absolute path with **forward slashes**, **no** ``file://`` scheme.
+    This matches the contract expected by ME4-UI for the top-level
+    response fields ``dirAbsolute`` / ``filesSavedTo`` / ``sessionDir``
+    (Spec YT-03 + Top-Level-Response example).
+
+    On Windows the drive letter (e.g. ``C:``) is preserved, producing
+    strings like ``"D:/DEV/ME4-S-youtube/work/session/<sid>/results"``.
+    On POSIX systems the result is the absolute posix path
+    (e.g. ``"/tmp/me4-data/sessions/sid-x/results"``); the
+    cross-platform shape is identical for the UI's allow-list logic.
+
+    ``Path.resolve()`` is used so symlinks and ``..`` segments are
+    collapsed; the resulting string is always absolute (no trailing
+    separator) and uses ``/`` consistently.
+    """
+    return Path(path).resolve().as_posix()
+
+
 # ---------------------------------------------------------------------------
 # Persistenz
 # ---------------------------------------------------------------------------

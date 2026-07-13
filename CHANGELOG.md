@@ -5,6 +5,60 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/de/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.4] - 2026-07-13
+
+### Fixed
+- `next_function_index` parser was overwriting `.01result.*` on every call because
+  it tested tokens with `isdigit()` that contained letters (`"abc123"`,
+  `"01result"`). New parser uses regex
+  `^[sid]\.(\d{2})result\.(json|md|html)$`, counts three file-views of the same
+  result as ONE sequence, and returns the next `NN` as a 2-digit string.
+  Regression test in `tests/test_seq_parser.py` covers the core finding
+  (two calls → `.01` and `.02`, no overwrite). Service version 1.0.0 → 1.0.4.
+  See PR #2 for the full PR-body / conversation (F-05 fix per BPSpec
+  `.spec/offen/me4-ui-service-owned-interaction-v1-audit-2026-07-12.md`).
+
+### Notes
+- Full change-log entry retained in `[Unreleased]` below — this release section
+  records the shipped item plus its PR pointer.
+
+## [1.0.5] - 2026-07-13
+
+### Fixed
+- `_summary` directory fields (`dirAbsolute`, `filesSavedTo`) now point at the
+  canonical `<session>/results/` directory instead of the per-function subdir.
+  New `resultsDir` legacy alias (identical to `dirAbsolute`), optional
+  `sessionDir`, mandatory `files[]` filtered to the current resultset
+  (`<sid>.<NN>result.{ext}`), explicit `jsonPath` / `mdPath` / `htmlPath`,
+  optional `listingError`. Implementation in new `app/response_contract.py`
+  (no FastAPI import, isolated testable); `app/http_api.py` reduced to a thin
+  wrapper. Helper `to_windows_url(Path)` added in `app/session_store.py`.
+  Three new tests in `tests/test_dir_contract.py` (21 asserts).
+- `write_result` migrated to the canonical
+  `<session>/results/<sid>.<NN>result.{ext}` layout (was the per-function
+  subdir `<session>/<NN-function>/`). Now uses `next_function_index(session_id)`
+  for the sequence number and annotates `result["jsonPath"|"mdPath"|"htmlPath"]`
+  so `_summary` extracts the current NN robustly from the path field (not from
+  the parser return value, which yields `max+1`). `get_function_dir` is now
+  deprecated. Three sequential regression tests renamed per user spec and now
+  exercise the real `write_result` path instead of `_touch` simulation.
+  Service version 1.0.4 → 1.0.5. See PR #3 for the full PR-body /
+  conversation (F-03 / F-04 / B-2 fixes per BPSpec).
+
+### Added
+- **New:** `services/me4-youtube.service.json` — 5th version-mirror location per
+  AD-6 (`me4-versioning-rule`, see BPSpec
+  `.spec/offen/me4-ui-service-owned-interaction-v1-audit-2026-07-12.md` §
+  „Version-Bump-Spiegelorte“). Carries `"version": "1.0.5"` in sync with
+  `pyproject.toml`, `app/__init__.py` (`__version__`) and `app/config.py`
+  (`settings.service_version`).
+
+### Notes
+- Full change-log entries retained in `[Unreleased]` below — this release section
+  records the shipped items plus their PR pointer (deliberate safer choice:
+  original `[Unreleased]` texts are NOT removed to avoid double-maintenance
+  risk; the released sections above are the canonical shipped-history pointers).
+
 ## [Unreleased]
 
 ### Fixed

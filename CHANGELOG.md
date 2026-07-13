@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   das nächste `NN` als 2-stelligen String zurück.  Regressionstest
   in `tests/test_seq_parser.py` deckt den Kern-Befund ab (zwei
   Aufrufe → `.01` und `.02`, keine Überschreibung).  Service-Version
-  1.0.3 → 1.0.4.
+  1.0.0 → 1.0.4.
 
 ### Planned
 - `docs/INTEGRATION.md` — formaler UI↔Service-Vertrag (Pilot-Phase 5)

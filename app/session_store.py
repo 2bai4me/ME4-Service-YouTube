@@ -65,10 +65,17 @@ def get_session_dir(session_id: str) -> Path:
 
 
 def get_function_dir(session_id: str, function_name: str) -> Path:
-    """Per-call subdirectory: <session>/<NN-slug>/.
+    """DEPRECATED -- Per-call subdirectory: <session>/<NN-slug>/.
 
-    The numeric prefix is sequential — incremented by counting existing
-    numbered subdirs.
+    Wird seit Phase 2 (F-03 / F-04) NICHT mehr von ``write_result``
+    benutzt.  Schreiber schreiben jetzt flach nach
+    ``<session>/results/<sid>.<NN>result.{ext}``.  Diese Funktion bleibt
+    fuer Alt-Aufrufer und Pre-Phase-2-Tests als Legacy-Stub erhalten
+    (gibt weiterhin einen Per-Call-Subdir zurueck, ohne den aber nichts
+    mehr geschrieben wird).
+
+    Neue Code-Pfade sollten stattdessen ``get_results_dir`` +
+    ``next_function_index`` verwenden.
     """
     base = get_session_dir(session_id)
     existing = sorted(p for p in base.iterdir() if p.is_dir() and p.name[:2].isdigit())
@@ -329,27 +336,40 @@ def write_result(
     result: dict[str, Any],
     request: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """Persist ``result`` as JSON + Markdown in the session dir and
-    update Notes.md.  Returns the paths and a short summary for the
-    Baustein chat notification.
+    """Persist ``result`` as JSON + Markdown + HTML in the canonical
+    Resultset-Layout ``<session>/results/<sid>.<NN>result.{ext}`` and
+    update Notes.md.  Returns the result annotated with file paths for
+    the Baustein chat notification (Phase 2 / F-03, F-04, YT-03, YT-04).
+
+    Layout (Spec YT-02..YT-06 + F-03 + F-04):
+        <session_root>/results/<sid>.<NN>result.{json,md,html}
+        <session_root>/Notes.md                              (aggregated)
+
+    Drei Dateiansichten desselben logischen Ergebnisses zaehlen als EINE
+    Sequenz; der naechste Call erhaelt NN+1.  Die Sequenznummer wird
+    von ``next_function_index(session_id)`` BEREITGESTELLT -- das heisst:
+    bei leerem Results-Verzeichnis liefert sie "01", nach einem
+    vorhandenen ".01result.*" liefert sie "02".
     """
     if not session_id:
         # Without a session id we can't write anywhere; return the raw
         # result unchanged so the caller can still surface it.
         return result
 
-    func_dir = get_function_dir(session_id, function_name)
+    results_dir = get_results_dir(session_id)
+    nn = next_function_index(session_id)
+    json_path = results_dir / f"{session_id}.{nn}result.json"
+    md_path = results_dir / f"{session_id}.{nn}result.md"
+    html_path = results_dir / f"{session_id}.{nn}result.html"
 
     # 1) JSON
     clean = {k: v for k, v in result.items() if k != "_dir"}
-    json_path = func_dir / "result.json"
     json_path.write_text(
         json.dumps(clean, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
 
     # 2) Markdown
-    md_path = func_dir / "result.md"
     md_text = format_result_markdown(function_name, clean)
     md_path.write_text(
         md_text,
@@ -357,14 +377,16 @@ def write_result(
     )
 
     # 3) HTML (standalone, mit eingebettetem Styling)
-    html_path = func_dir / "result.html"
     html_path.write_text(
         format_result_html(function_name, clean, md_text),
         encoding="utf-8",
     )
 
-    # 4) Annotate the result so the caller can find the dir back
-    result["_dir"] = str(func_dir)
+    # 4) Annotate the result so _summary can derive NN from jsonPath
+    result["_dir"] = str(results_dir)        # legacy alias (now points to results/)
+    result["jsonPath"] = str(json_path)
+    result["mdPath"] = str(md_path)
+    result["htmlPath"] = str(html_path)
 
     # 5) Append to Notes.md
     update_session_notes(session_id, function_name, result, request)

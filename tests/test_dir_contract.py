@@ -1,4 +1,5 @@
-r"""Tests fuer ``app.response_contract::build_summary`` (Spec YT-03, F-03, F-04).
+r"""Tests fuer ``app.response_contract::build_summary`` + ``app.session_store.write_result``
+(Spec YT-03, YT-04, F-03, F-04).
 
 Vertrag (Spec Top-Level-Response):
   - ``dirAbsolute`` / ``filesSavedTo`` / ``resultsDir`` zeigen alle drei
@@ -9,16 +10,19 @@ Vertrag (Spec Top-Level-Response):
     Vorgenger-Resultsets werden ausgeschlossen.
   - Zwei sequenzielle Calls in derselben Session duerfen sich nicht
     gegenseitig ueberschreiben (Regression-Garantie fuer Phase-1-Parser).
+  - ``write_result`` schreibt tatsaechlich nach
+    ``<session>/results/<sid>.<NN>result.{ext}`` und annotiert
+    ``result["jsonPath"|"mdPath"|"htmlPath"]`` (Phase 2 / F-03, F-04).
 
 Test-Strategie:
-  * Reiner Logik-Test; ruft ``build_summary`` direkt auf.
+  * Reiner Logik-Test; ruft ``build_summary`` und ``write_result`` direkt
+    auf.
   * Kein FastAPI-/yt_dlp-/zmq-Boot noetig.
   * ``tmp_path`` als ``settings.data_dir``-Root, damit die Pfad-Funktionen
     in der Sandbox schreiben.
-  * Die ``write_result``-Migration (Phase 4) wird hier NICHT vorausgesetzt
-    -- die Tests konstruieren die nötigen ``<sid>.<NN>result.{ext}``-
-    Dateien manuell und setzen ggf. ``result['jsonPath']`` wie es Phase 4
-    spaeter tun wird.
+  * Sequenzielle Regression-Tests benutzen den echten ``write_result``
+    (statt ``_touch``-Simulation), damit ein zukuenftiger
+    write_result-Regression-Defekt sofort sichtbar wird.
 """
 from __future__ import annotations
 
@@ -67,7 +71,7 @@ class TestDirAbsolutePointsToResults:
     """Spec YT-03 + F-03: ``dirAbsolute`` zeigt auf das ``results/``-Verzeichnis,
     nicht auf den Session-Root und nicht auf einen Per-Function-Subdir."""
 
-    def test_dirabsolute_ends_with_results(self, isolated_data_dir, tmp_path: Path):
+    def test_dirabsolute_points_to_results(self, isolated_data_dir, tmp_path: Path):
         s = build_summary(
             "get-metadata",
             {"_dir": "<legacy-ignored>", "success": True, "title": "Hello"},
@@ -169,30 +173,30 @@ class TestFilesListFiltersToResultset:
     """Spec YT-04 + F-04: ``files[]`` enthaelt nur die Dateien des aktuellen
     Resultsets (``<sid>.<NN>result.{ext}``)."""
 
-    def test_files_filters_to_nn01_resultset(self, isolated_data_dir):
+    def test_files_list_filters_to_resultset(self, isolated_data_dir):
         """Test-Setup wie in der Phase-2-Beschreibung:
             - Notes.md (raussen)
             - <sid>.01result.{json,md,html} (drin)
             - <sid>.02result.json (raussen, weil NN != aktuelles NN)
-        Das aktuelle NN wird via ``result['jsonPath']`` signalisiert (so
-        wie es ``write_result`` in Phase 4 tun wird)."""
+        Die kanonische ``<sid>.<NN>result.{ext}``-Schreibung kommt jetzt
+        vom echten ``write_result`` (nicht mehr von ``_touch``-Setup).
+        """
+        from app.session_store import write_result
         sid = "sid-x"
         rd = get_results_dir(sid)
-        # Setup exakt wie in der Aufgabenstellung.
+        # Setup exakt wie in der Aufgabenstellung: ein NN=01-Resultset
+        # via write_result, plus Notes.md und ein .02result.json-Ablenker.
+        r1 = write_result(
+            sid, "get-metadata",
+            {"success": True, "title": "NN01", "channel": "C"},
+            request={"sessionId": sid, "url": "https://x"},
+        )
         _touch(rd / "Notes.md", "# log")
-        _touch(rd / f"{sid}.01result.json", "resultset 01")
-        _touch(rd / f"{sid}.01result.md",   "resultset 01")
-        _touch(rd / f"{sid}.01result.html", "resultset 01")
-        _touch(rd / f"{sid}.02result.json", "resultset 02")  # Ablenker
+        _touch(rd / f"{sid}.02result.json", "noise")  # Ablenker
 
-        # Aktuelles NN=01 wird via jsonPath signalisiert (Phase-4-Stil).
-        result = {
-            "_dir": "<legacy-ignored>",
-            "jsonPath": str(rd / f"{sid}.01result.json"),
-            "mdPath":   str(rd / f"{sid}.01result.md"),
-            "htmlPath": str(rd / f"{sid}.01result.html"),
-        }
-        s = build_summary("get-metadata", result, session_id=sid)
+        # build_summary wird mit dem write_result-Output gefuettert --
+        # jsonPath/mdPath/htmlPath zeigen jetzt auf die echten Dateien.
+        s = build_summary("get-metadata", r1, session_id=sid)
 
         # Erwartung: genau die 3 Dateien fuer NN=01.
         names = sorted(f["name"] for f in s["files"])
@@ -304,7 +308,17 @@ class TestSequentialResultsNoOverwrite:
     eingreift.  Er beweist aber: die Pfad-/Listing-Kontrakte funktionieren
     konsistent fuer NN=01 und NN=02."""
 
-    def test_two_consecutive_resultsets_no_overwrite(self, isolated_data_dir, tmp_path: Path):
+    def test_sequential_results_no_overwrite(self, isolated_data_dir, tmp_path: Path):
+        """Zwei echte ``write_result``-Calls erzeugen ``.01result.*`` und
+        ``.02result.*`` ohne dass ``.01`` ueberschrieben wird
+        (Regression-Schutz Phase 1 + Phase 2).
+
+        B-2 Cross-Review: vorher wurde das Schreiben per ``_touch``
+        simuliert; jetzt fahren wir den echten ``write_result``-Pfad --
+        damit faengt dieser Test auch Regression-Defekte in
+        ``write_result`` selbst ab.
+        """
+        from app.session_store import write_result
         sid = "sid-x"
         rd = get_results_dir(sid)
         assert rd.exists()
@@ -312,16 +326,16 @@ class TestSequentialResultsNoOverwrite:
         # --- Aufruf 1: next_function_index liefert "01" ---
         idx1 = next_function_index(sid)
         assert idx1 == "01"
-        # Schreibe drei Dateien (wie write_result es in Phase 4 tun wird).
-        for ext in ("json", "md", "html"):
-            _touch(rd / f"{sid}.{idx1}result.{ext}",
-                   body=f"// resultset {idx1} {ext}")
-
-        # _summary simuliert Phase-4-write_result: setzt jsonPath.
-        result1 = {"jsonPath": str(rd / f"{sid}.{idx1}result.json")}
+        result1 = write_result(
+            sid, "get-metadata",
+            {"success": True, "title": "Erster Call", "channel": "TestChannel"},
+            request={"sessionId": sid, "url": "https://x"},
+        )
         s1 = build_summary("get-metadata", result1, session_id=sid)
 
-        assert s1["dirAbsolute"].endswith("/results"),             f"dirAbsolute endet nicht auf /results: {s1['dirAbsolute']!r}"
+        assert s1["dirAbsolute"].endswith("/results"), (
+            f"dirAbsolute endet nicht auf /results: {s1['dirAbsolute']!r}"
+        )
         names1 = sorted(f["name"] for f in s1["files"])
         assert names1 == sorted([
             f"{sid}.01result.html",
@@ -335,10 +349,11 @@ class TestSequentialResultsNoOverwrite:
             f"Parser-Bug: zweiter Aufruf liefert {idx2!r}, nicht '02'. "
             "Dann wuerde das naechste Write das alte .01result.* ueberschreiben."
         )
-        for ext in ("json", "md", "html"):
-            _touch(rd / f"{sid}.{idx2}result.{ext}",
-                   body=f"// resultset {idx2} {ext}")
-        result2 = {"jsonPath": str(rd / f"{sid}.{idx2}result.json")}
+        result2 = write_result(
+            sid, "get-metadata",
+            {"success": True, "title": "Zweiter Call", "channel": "TestChannel"},
+            request={"sessionId": sid, "url": "https://y"},
+        )
         s2 = build_summary("get-metadata", result2, session_id=sid)
 
         assert s2["dirAbsolute"] == s1["dirAbsolute"], (
@@ -356,56 +371,69 @@ class TestSequentialResultsNoOverwrite:
         )
 
         # --- Beide Resultsets existieren physisch, keine Datei ueberschrieben ---
-        for nn in ("01", "02"):
+        for nn, marker in (("01", "Erster Call"), ("02", "Zweiter Call")):
             for ext in ("json", "md", "html"):
                 p = rd / f"{sid}.{nn}result.{ext}"
                 assert p.exists(), f"{p.name} fehlt -- wurde ueberschrieben?"
                 body = p.read_text(encoding="utf-8")
-                assert f"resultset {nn}" in body, (
+                assert marker in body, (
                     f"{p.name} enthaelt nicht den erwarteten Resultset-"
-                    f"Marker '{nn}' -- wurde vermutlich ueberschrieben."
+                    f"Marker '{marker}' -- wurde vermutlich ueberschrieben."
                 )
 
     def test_three_consecutive_resultsets_stay_disjoint(self, isolated_data_dir):
-        """Stressprobe: drei sequenzielle Resultsets, jedes isoliert."""
+        """Stressprobe: drei sequenzielle ``write_result``-Calls, jedes
+        Resultset isoliert (kein Overwrite, kein Vermischen)."""
+        from app.session_store import write_result
         sid = "sid-x"
         rd = get_results_dir(sid)
-        for expected in ("01", "02", "03"):
+        for expected, marker in (("01", "Call A"), ("02", "Call B"), ("03", "Call C")):
             idx = next_function_index(sid)
             assert idx == expected
-            for ext in ("json", "md", "html"):
-                _touch(rd / f"{sid}.{idx}result.{ext}",
-                       body=f"// resultset {idx} {ext}")
-            # Listing nach jedem Schritt pruefen.
-            result = {"jsonPath": str(rd / f"{sid}.{idx}result.json")}
-            s = build_summary("get-metadata", result, session_id=sid)
+            r = write_result(
+                sid, "get-metadata",
+                {"success": True, "title": marker},
+                request={"sessionId": sid, "url": f"https://{marker.lower().replace(' ', '')}"},
+            )
+            s = build_summary("get-metadata", r, session_id=sid)
             names = sorted(f["name"] for f in s["files"])
             assert names == sorted([
                 f"{sid}.{idx}result.html",
                 f"{sid}.{idx}result.json",
                 f"{sid}.{idx}result.md",
             ]), f"Listing fuer NN={idx} falsch: {names}"
-        # Alle neun Dateien muessen physisch existieren.
-        for nn in ("01", "02", "03"):
+        # Alle neun Dateien muessen physisch existieren und korrekt
+        # getaggt sein (kein Ueberschreiben).
+        for nn, marker in (("01", "Call A"), ("02", "Call B"), ("03", "Call C")):
             for ext in ("json", "md", "html"):
-                assert (rd / f"{sid}.{nn}result.{ext}").exists()
+                p = rd / f"{sid}.{nn}result.{ext}"
+                assert p.exists(), f"{p.name} fehlt"
+                body = p.read_text(encoding="utf-8")
+                assert marker in body, (
+                    f"{p.name} enthaelt nicht den erwarteten Marker "
+                    f"'{marker}' -- wurde ueberschrieben?"
+                )
 
     def test_listing_path_inside_dirabsolute(self, isolated_data_dir):
-        """Auch fuer zwei sequenzielle Resultsets liegen jsonPath/mdPath/htmlPath
-        jeweils unterhalb ``dirAbsolute``."""
+        """Auch fuer zwei sequenzielle Resultsets (via ``write_result``)
+        liegen ``jsonPath``/``mdPath``/``htmlPath`` jeweils unterhalb
+        ``dirAbsolute``."""
+        from app.session_store import write_result
         sid = "sid-x"
-        rd = get_results_dir(sid)
 
-        for idx in ("01", "02"):
-            for ext in ("json", "md", "html"):
-                _touch(rd / f"{sid}.{idx}result.{ext}", body="x")
-            result = {"jsonPath": str(rd / f"{sid}.{idx}result.json")}
-            s = build_summary("get-metadata", result, session_id=sid)
+        for call_no in (1, 2):
+            r = write_result(
+                sid, "get-metadata",
+                {"success": True, "title": f"Call {call_no}"},
+                request={"sessionId": sid, "url": f"https://x{call_no}"},
+            )
+            s = build_summary("get-metadata", r, session_id=sid)
             d = Path(s["dirAbsolute"])
             for key in ("jsonPath", "mdPath", "htmlPath"):
                 p = Path(s[key])
                 assert p.parent == d, (
-                    f"NN={idx}: {key}={p!r} liegt nicht unter dirAbsolute={d!r}"
+                    f"Call {call_no}: {key}={p!r} liegt nicht unter "
+                    f"dirAbsolute={d!r}"
                 )
 
 

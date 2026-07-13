@@ -44,4 +44,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   Pfad-Felder benutzt; sein String-Rückgabewert wird nie
   re-formatiert (`f"{nn:02d}"` würde „0105" liefern).
   Service-Version 1.0.4 → 1.0.5.
+- `fix(service): migrate write_result to canonical resultsets (Phase 2 B-2)` —
+  `write_result` schrieb bisher in den Per-Function-Subdir
+  `<session>/<NN-function>/` und annotierte nur `result["_dir"]`.  Damit
+  zeigten die Phase-2-Vertragsfelder (`jsonPath`/`mdPath`/`htmlPath`,
+  `files[]`, `dirAbsolute`) auf nicht-existente Dateien.  Cross-Review-
+  Fix (B-2): Migration auf das kanonische Resultset-Layout
+  `<session>/results/<sid>.<NN>result.{ext}`.  `write_result` nutzt jetzt
+  `next_function_index(session_id)` für die Sequenznummer und annotiert
+  `result["jsonPath"|"mdPath"|"htmlPath"]`, damit `_summary` das aktuelle
+  NN robust aus dem Path-Feld extrahieren kann (statt aus dem
+  Parser-Rückgabewert, der `max+1` liefert).  `get_function_dir` ist
+  jetzt deprecated (kein Aufrufer mehr in `app/`/`tests/`).
+  Drei Tests umbenannt auf User-Vorgabe
+  (`test_dirabsolute_points_to_results`, `test_files_list_filters_to_resultset`,
+  `test_sequential_results_no_overwrite`).  Sequenzielle Regression-Tests
+  exerzieren jetzt den echten `write_result`-Pfad statt `_touch`-Simulation.
 

@@ -15,6 +15,7 @@ from __future__ import annotations
 import datetime as _dt
 import json
 import os
+import re
 from pathlib import Path
 from typing import Any
 
@@ -75,6 +76,90 @@ def get_function_dir(session_id: str, function_name: str) -> Path:
     func_dir = base / f"{next_idx:02d}-{_slug(function_name)}"
     func_dir.mkdir(parents=True, exist_ok=True)
     return func_dir
+
+
+# ---------------------------------------------------------------------------
+# Sequenz-Parser (F-05, YT-02)
+# ---------------------------------------------------------------------------
+#
+#   <session_root>/results/<sid>.<NN>result.{json,md,html}
+#
+# Drei Dateiansichten desselben logischen Ergebnisses (json, md, html)
+# zählen als EINE Sequenz. Der nächste Funktionsaufruf erhält NN+1.
+# Vorhandene Dateien dürfen nicht überschrieben werden.
+#
+
+# Anchor: <sid> (mindestens ein Nicht-Punkt-Zeichen, kein '.' im sid).
+# Danach literal '.', genau zwei Ziffern, literal 'result.', dann eine
+# der drei erlaubten Extensions (json|md|html) am Stringende.
+# Beispiel-Match: "abc123.01result.json"  -> sid="abc123", nn="01", ext="json"
+# Negativ-Beispiele (kein Match):
+#   "Notes.md"                -> falsche Extension
+#   ".DS_Store"               -> falsche Form
+#   "abc.01resultJson"        -> falsche Extension (CamelCase)
+#   "abc123.1result.json"     -> nur eine Ziffer
+#   "abc.01.results.json"     -> extra '.' vor 'result'
+_RESULT_RE = re.compile(
+    r"^(?P<sid>[^.]+)\.(?P<nn>\d{2})result\.(?P<ext>json|md|html)$"
+)
+
+
+def get_results_dir(session_id: str) -> Path:
+    """Directory for structured result files: ``<session_root>/results/``.
+
+    Returns the canonical flat-resultset directory for the given session
+    id and ensures it exists on disk.  This layout (F-05 / YT-02) places
+    ``<sid>.<NN>result.{json,md,html}`` side-by-side inside ``results/``;
+    three file-views of the same logical result count as ONE sequence.
+    """
+    d = get_session_dir(session_id) / "results"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def next_function_index(session_id: str) -> str:
+    """Nächste freie 2-stellige Sequenz für Result-Dateien.
+
+    Pattern: ``<sid>.<NN>result.{json,md,html}``. Drei Dateiansichten
+    desselben logischen Ergebnisses zählen als EINE Sequenz. Der nächste
+    Aufruf erhält NN+1.
+
+    Verhalten:
+      * Nur Dateien, die exakt auf das Regex-Pattern matchen, zählen.
+      * ``Notes.md``, Verzeichnisse und alle anderen Dateien werden
+        ignoriert.
+      * Sequenzen anderer Sessions (anderer ``<sid>``-Prefix im selben
+        Verzeichnis) werden ignoriert.
+      * Rückgabe ist immer als 2-stellig formatierter String
+        (``"01"`` ... ``"99"``), damit Aufrufer die Formatierung nicht
+        doppelt anwenden müssen.
+
+    Args:
+        session_id: Die Session-ID, deren Result-Verzeichnis gescannt
+            wird. Der ``<sid>``-Anteil im Filename muss mit dieser ID
+            übereinstimmen, sonst wird die Datei nicht gezählt.
+
+    Returns:
+        Format-String ``"01"``, ``"02"``, ... ``"99"``.
+    """
+    results = get_results_dir(session_id)
+    max_idx = 0
+    for p in results.iterdir():
+        if not p.is_file():
+            continue
+        m = _RESULT_RE.match(p.name)
+        if not m:
+            continue
+        # Defensiv: der Regex [^.]+ würde auch fremde Sessions matchen,
+        # wenn Dateien aus verschiedenen Sessions versehentlich im selben
+        # results/-Verzeichnis landen. Wir zählen nur Sequenzen, deren
+        # <sid>-Segment zur aufrufenden session_id passt.
+        if m.group("sid") != session_id:
+            continue
+        idx = int(m.group("nn"))
+        if idx > max_idx:
+            max_idx = idx
+    return f"{max_idx + 1:02d}"
 
 
 # ---------------------------------------------------------------------------

@@ -27,6 +27,7 @@ Test-Strategie:
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -380,6 +381,71 @@ class TestSequentialResultsNoOverwrite:
                     f"{p.name} enthaelt nicht den erwarteten Resultset-"
                     f"Marker '{marker}' -- wurde vermutlich ueberschrieben."
                 )
+
+    def test_notes_md_links_resolve_after_write_result(
+        self, isolated_data_dir, tmp_path: Path
+    ):
+        """Nach einem echten ``write_result`` muessen alle Notes.md-Datei-Links
+        tatsaechlich auf existierende Dateien im results/-Verzeichnis zeigen.
+
+        Regression gegen B-3: vor dem Fix zeigte Notes.md auf
+        ``./results/result.json``, weil ``update_session_notes`` aus
+        ``Path(result['_dir']).name`` (jetzt ``results``) plus hard-coded
+        ``/result.{ext}`` zusammenbaute -- aber nach der write_result-Migration
+        heissen die Dateien ``<sid>.<NN>result.{ext}``.
+        """
+        from app.session_store import write_result
+        sid = "probe-sid"
+        notes_path = get_session_dir(sid) / "Notes.md"
+
+        write_result(
+            sid, "get-metadata",
+            {"success": True, "title": "Probe Call"},
+            request={"sessionId": sid, "url": "https://x"},
+        )
+        write_result(
+            sid, "get-comments",
+            {"success": True, "title": "Probe Call 2"},
+            request={"sessionId": sid, "url": "https://x"},
+        )
+
+        assert notes_path.exists(), "Notes.md sollte nach write_result existieren"
+        notes_text = notes_path.read_text(encoding="utf-8")
+
+        # Regex: alle Markdown-Links der Form ([label](...)) deren Label
+        # auf .json/.md/.html endet.  Konkrete Files haben Form
+        # ``<sid>.<NN>result.{ext}`` -- der Label hier ist
+        # ``./results/<sid>.<NN>result.{ext}``, also reicht eine
+        # Extension-Sensitivitaet; die NN-Progression pruefen wir unten
+        # explizit.
+        link_re = re.compile(
+            r"\[([^\s\]]+\.(?:json|md|html))\]\(([^)]+)\)"
+        )
+        matches = link_re.findall(notes_text)
+        assert matches, (
+            "Notes.md enthaelt keine .result.{ext}-Markdown-Links; "
+            "B-3-Fix verfehlt?"
+        )
+
+        notes_dir = notes_path.parent
+        for displayed, target in matches:
+            # Markdown-Links sind relativ zu Notes.md.
+            target_abs = (notes_dir / target.lstrip("./")).resolve()
+            assert target_abs.exists(), (
+                f"Notes.md-Link ist broken: '{displayed}' -> '{target}' "
+                f"(expected {target_abs})"
+            )
+            # Dateinamen enthalten den echten Resultset-Pfad -- nicht
+            # ``results/result.json`` (das war der B-3-Bug).  Erwartet wird
+            # ``<sid>.<NN>result.{{ext}}`` irgendwo im Link-Ziel -- die
+            # Position ist frei (kann mit oder ohne fuehrendem ``.`` sein).
+            assert (
+                f"{sid}.01result." in target
+                or f"{sid}.02result." in target
+            ), (
+                f"Notes.md-Link zeigt auf falschen Namen (B-3 wieder?): "
+                f"'{target}' -- sollte '<sid>.<NN>result.{{ext}}' enthalten"
+            )
 
     def test_three_consecutive_resultsets_stay_disjoint(self, isolated_data_dir):
         """Stressprobe: drei sequenzielle ``write_result``-Calls, jedes

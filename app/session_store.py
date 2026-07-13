@@ -225,14 +225,29 @@ def update_session_notes(
     ok = result.get("success")
     if ok is not None:
         lines.append(f"- **Result:** {'✅ success' if ok else '❌ failed'}")
-    # link to the result files
-    rel_dir = f"./{Path(result['_dir']).name}" if result.get("_dir") else ""
-    if rel_dir:
+    # link to the result files -- built from the canonical paths set by
+    # write_result (Phase 2 / F-03, F-04), relative to Notes.md's directory.
+    # Skip the Files line entirely if those annotations are missing -- better
+    # silent than broken (B-3 review fix).
+    json_p = result.get("jsonPath")
+    md_p = result.get("mdPath")
+    html_p = result.get("htmlPath")
+
+    if (
+        isinstance(json_p, str)
+        and isinstance(md_p, str)
+        and isinstance(html_p, str)
+    ):
+        def _rel_link(abs_path: str) -> str:
+            abs_path_obj = Path(abs_path)
+            rel = os.path.relpath(abs_path_obj, notes_path.parent)
+            return "./" + rel.replace(os.sep, "/")
+
         lines.append(
             f"- **Files:** "
-            f"[{rel_dir}/result.json]({rel_dir}/result.json) · "
-            f"[{rel_dir}/result.md]({rel_dir}/result.md) · "
-            f"[{rel_dir}/result.html]({rel_dir}/result.html)"
+            f"[{_rel_link(json_p)}]({_rel_link(json_p)}) · "
+            f"[{_rel_link(md_p)}]({_rel_link(md_p)}) · "
+            f"[{_rel_link(html_p)}]({_rel_link(html_p)})"
         )
     if result.get("path"):
         lines.append(f"- **Binary:** `{result['path']}`")

@@ -170,24 +170,19 @@ def next_function_index(session_id: str) -> str:
 
 
 def to_windows_url(path: Path | str) -> str:
-    """Convert a Path to Windows-URL form for transport to UI clients.
+    """Backward-compat shim for ``to_platform_path(path)`` (Phase 4b).
 
-    Format: absolute path with **forward slashes**, **no** ``file://`` scheme.
-    This matches the contract expected by ME4-UI for the top-level
-    response fields ``dirAbsolute`` / ``filesSavedTo`` / ``sessionDir``
-    (Spec YT-03 + Top-Level-Response example).
-
-    On Windows the drive letter (e.g. ``C:``) is preserved, producing
-    strings like ``"D:/DEV/ME4-S-youtube/work/session/<sid>/results"``.
-    On POSIX systems the result is the absolute posix path
-    (e.g. ``"/tmp/me4-data/sessions/sid-x/results"``); the
-    cross-platform shape is identical for the UI's allow-list logic.
-
-    ``Path.resolve()`` is used so symlinks and ``..`` segments are
-    collapsed; the resulting string is always absolute (no trailing
-    separator) and uses ``/`` consistently.
+    Spec YT-03 + Top-Level-Response example.  This function predates the
+    Phase-4b WSL->Windows translation setting; it now delegates to
+    ``app.path_utils.to_platform_path`` so the same call site picks up
+    ``settings.windows_path_translation`` automatically.  New code should
+    call ``to_platform_path`` directly (the keyword-only ``windows``
+    override is the canonical knob).
     """
-    return Path(path).resolve().as_posix()
+    # Local import to avoid a circular dep with ``app.config`` during
+    # interpreter bootstrap.
+    from app.path_utils import to_platform_path
+    return to_platform_path(path)
 
 
 # ---------------------------------------------------------------------------

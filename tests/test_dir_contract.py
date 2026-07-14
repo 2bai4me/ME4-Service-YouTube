@@ -287,7 +287,7 @@ class TestFilesListFiltersToResultset:
         s = build_summary("get-metadata", result, session_id=sid)
         assert len(s["files"]) == 1
         f = s["files"][0]
-        assert set(f.keys()) == {"name", "size", "mtimeMs"}
+        assert set(f.keys()) == {"name", "size", "mtimeMs", "path", "openUrl"}
         assert f["name"] == f"{sid}.01result.json"
         assert f["size"] >= 7  # '{"k":1}'.__len__() = 7
         assert isinstance(f["mtimeMs"], int)

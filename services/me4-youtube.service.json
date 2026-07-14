@@ -4,7 +4,7 @@
   "description": "YouTube content extraction service — fetches metadata, transcripts and comments, and downloads video, audio and subtitles via yt-dlp. The buttons, pipeline, functions and greeting are all defined by the service itself via /api/manifest — this file is only a seed that tells the Baustein where to reach the service.",
   "subtitle": "YouTube-Metadaten, Transkripte, Downloads",
   "apiProxyBase": "http://localhost:8770",
-  "version": "1.0.6",
+  "version": "1.0.7",
   "piAgent": {
     "enabled": true,
     "model": "minimax-m3",

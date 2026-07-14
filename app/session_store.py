@@ -377,34 +377,77 @@ def write_result(
     md_path = results_dir / f"{session_id}.{nn}result.md"
     html_path = results_dir / f"{session_id}.{nn}result.html"
 
-    # 1) JSON
+    # YT-05 (Phase 4): track per-file write outcome so we can decide
+    # the headline.success AFTER all three writes completed. Spec says:
+    # "Erst NACH erfolgreichem Write aller 3 -> headline.success=true".
+    # A failure in any single file must not silently produce a
+    # success=true headline.
+    write_errors: list[str] = []
     clean = {k: v for k, v in result.items() if k != "_dir"}
-    json_path.write_text(
-        json.dumps(clean, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+
+    # 1) JSON
+    try:
+        json_path.write_text(
+            json.dumps(clean, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+    except OSError as e:
+        write_errors.append(f"json: {e}")
 
     # 2) Markdown
     md_text = format_result_markdown(function_name, clean)
-    md_path.write_text(
-        md_text,
-        encoding="utf-8",
-    )
+    try:
+        md_path.write_text(md_text, encoding="utf-8")
+    except OSError as e:
+        write_errors.append(f"md: {e}")
 
     # 3) HTML (standalone, mit eingebettetem Styling)
-    html_path.write_text(
-        format_result_html(function_name, clean, md_text),
-        encoding="utf-8",
-    )
+    try:
+        html_path.write_text(
+            format_result_html(function_name, clean, md_text),
+            encoding="utf-8",
+        )
+    except OSError as e:
+        write_errors.append(f"html: {e}")
+
+    # YT-05: verify all three files are non-empty (spec: >=1 Byte each).
+    for label, p in (("json", json_path), ("md", md_path), ("html", html_path)):
+        try:
+            if p.stat().st_size < 1:
+                write_errors.append(f"{label}: empty")
+        except OSError as e:
+            write_errors.append(f"{label} stat: {e}")
 
     # 4) Annotate the result so _summary can derive NN from jsonPath
+    #    (annotate even on failure so the UI can show intended paths).
     result["_dir"] = str(results_dir)        # legacy alias (now points to results/)
     result["jsonPath"] = str(json_path)
     result["mdPath"] = str(md_path)
     result["htmlPath"] = str(html_path)
 
-    # 5) Append to Notes.md
-    update_session_notes(session_id, function_name, result, request)
+    # YT-05: headline.success gate. If the upstream said success but any
+    # of the three Resultset-files failed to write or came back empty,
+    # flip success to false and append an explicit errorCode/Message
+    # so the Baustein surfaces the persistence failure.
+    if write_errors:
+        existing_err = result.get("error") or ""
+        joined = "; ".join(write_errors)
+        if existing_err:
+            result["error"] = f"{existing_err}; persistence: {joined}"
+        else:
+            result["error"] = f"persistence: {joined}"
+        result["errorCode"] = "PERSISTENCE_INCOMPLETE"
+        result["persistenceErrors"] = write_errors
+        # Override success to False -- the canonical Resultset is
+        # incomplete. The caller (HTTP / ZMQ) still returns the
+        # annotated result so the UI can render the failure path.
+        result["success"] = False
+
+    # 5) Append to Notes.md (best-effort; never block on this)
+    try:
+        update_session_notes(session_id, function_name, result, request)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("Notes.md update failed for %s: %s", session_id, e)
 
     return result
 

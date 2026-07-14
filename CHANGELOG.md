@@ -59,6 +59,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   original `[Unreleased]` texts are NOT removed to avoid double-maintenance
   risk; the released sections above are the canonical shipped-history pointers).
 
+## [1.0.6] - 2026-07-13
+
+### Fixed
+- `fix(service): YT-05 write-result completeness gate (Phase 4)` —
+  `write_result` schrieb bisher die drei Resultset-Dateien
+  (``<sid>.<NN>result.{json,md,html}``) ohne Erfolgs-Gate: wenn ein
+  Write fehlschlug (z.B. ``OSError`` weil Disk voll oder Path blockiert),
+  bubblte die Exception bis zum HTTP-Endpoint hoch und produzierte einen
+  HTTP-500, obwohl der Upstream-``success``-Wert ``true`` war.  Phase-4-
+  Fix: jeder der drei ``Path.write_text``-Calls ist jetzt in einen
+  ``try/except OSError``-Block eingewickelt, die Ergebnisse werden in
+  ``write_errors`` gesammelt.  Nach dem Write-Block wird per
+  ``Path.stat().st_size >= 1`` geprueft, dass alle drei Dateien
+  tatsaechlich nicht-leer sind (Spec YT-05: ``≥1 Byte``).  Bei Fehlern
+  wird ``result["success"]`` auf ``False`` gesetzt, ein expliziter
+  ``errorCode="PERSISTENCE_INCOMPLETE"`` plus ``persistenceErrors``
+  angehaengt und der ``error``-String erweitert.  Annotation der
+  ``jsonPath``/``mdPath``/``htmlPath``-Felder erfolgt weiterhin, damit
+  die UI auch im Fehlerfall die intendierten Pfade rendern kann.
+  ``update_session_notes`` wird im ``try/except`` ausgefuehrt (best-
+  effort), damit ein Notes-Fehler nie den eigentlichen Write-Pfad
+  blockiert.  Service-Version 1.0.5 → 1.0.6.
+
+### Added
+- `tests/test_phase4_persistence.py` — YT-08 + YT-05 + YT-06 Contract-
+  und Persistenztests (22 Cases, alle gruen):
+  * **YT-08-1** WORK_DIR/session/<sid>/results wird erzeugt
+  * **YT-08-2** erster Aufruf schreibt ``.01result.{json,md,html}`` (alle >=1 Byte)
+  * **YT-08-3** zweiter Aufruf schreibt ``.02result.*`` und ueberschreibt ``.01`` NICHT
+  * **YT-08-4** ``dirAbsolute == filesSavedTo == resultsDir``
+  * **YT-08-5** ``jsonPath``/``mdPath``/``htmlPath`` liegen INNERHALB ``dirAbsolute``
+  * **YT-08-6** ``files[]`` entspricht 1:1 dem Filesystem-Listing von ``dirAbsolute``
+  * **YT-08-7** fehlende URL liefert korrektes ``awaitInput`` (Title, Description, URL-Label, Typ, Required, Placeholder) — inkl. ``/api/metadata``, ``/api/transcript``, ``/api/comments``, ``/api/download``
+  * **YT-05** Write-Komplett-Garantie: success=true nur wenn alle 3 Writes OK + Dateien non-empty; Write-Fehler flippen ``success`` auf ``false`` mit ``errorCode="PERSISTENCE_INCOMPLETE"``
+  * **YT-06** ``awaitInput`` ist service-owned (URL-Feld in ``app/http_api._URL_FIELD``; envelope-Form durch ``_await_input``-Helper)
+
+### Notes
+- Verifikation: ``pytest tests/test_phase4_persistence.py -v`` → 22 passed.
+- Vollstaendige Suite: ``pytest tests/`` → 122 passed, 2 pre-existing failed
+  (``test_http_api.py::test_manifest`` + ``test_zmq_service.py::test_manifest_contains_loadbalancer``
+  erwarten ``data["service_id"]`` auf Top-Level, die aktuelle
+  ``/api/manifest``-Implementierung liefert es unter
+  ``data["service_bus_manifest"]["service_id"]`` -- nicht in Phase-4-Scope,
+  vor Phase 2.2 manifest-refactor bereits divergent).
+
 ## [Unreleased]
 
 ### Fixed

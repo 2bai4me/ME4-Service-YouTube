@@ -184,7 +184,7 @@ class LoadBalancerZMQ:
                     "service_id": "ME4-YOUTUBE-LB",
                     "service_name": "ME4-YouTube Loadbalancer",
                     "type": "loadbalancer",
-                    "version": "1.0.0",
+                    "version": settings.service_version,
                     "zmq_port": self.port,
                     "pool_size": self.pool.size,
                 },

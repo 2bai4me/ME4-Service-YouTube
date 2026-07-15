@@ -243,7 +243,7 @@ class ServiceBootstrap:
         """Druckt das READY-Banner mit allen Endpunkten."""
         print()
         print("+----------------------------------------------------------------+")
-        print("|  [OK]  SERVICE BEREIT - ME4-YouTube v1.0.0                     |")
+        print(f"|  [OK]  SERVICE BEREIT - ME4-YouTube v{__version__:<26}|")
         print("+----------------------------------------------------------------+")
         print(f"|  HTTP API:        http://localhost:{settings.http_port}/docs")
         print(f"|  Framie-UI:       http://localhost:{settings.http_port}/ui/index.html")

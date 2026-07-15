@@ -13,7 +13,7 @@
 | API-Key Auth (X-API-Key / api_key) | ✅ | `app/auth.py` (HMAC-compare, constant-time) |
 | UI-Manifest | ✅ | `zmq_service._manifest()` + `/api/manifest` |
 | Service-ID | ✅ | `ME4-YOUTUBE` |
-| API-Version | ✅ | `1.0.0` |
+| API-Version | ✅ | `1.2.001` |
 | Standard-Tools (`ping`, `get_manifest`, `health`, `shutdown`) | ✅ | `zmq_service._tools_list()` |
 | `tools/list` & `tools/call` | ✅ | `zmq_service._handle()` |
 | `SERVICE.md` & `AGENT.md` | ✅ | im Repo |

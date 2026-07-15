@@ -1,10 +1,7 @@
 """Tests für die ZMQ-Service-Tool-Liste (MCP-konform)."""
 from __future__ import annotations
 
-import json
-
-import pytest
-
+from app.config import settings
 from app.loadbalancer import WorkerPool
 from app.zmq_service import ZMQService
 
@@ -43,9 +40,9 @@ class TestZMQService:
         pool = WorkerPool(host="127.0.0.1", base_port=0)
         zmq = ZMQService(pool=pool, port=0)
         m = zmq._manifest()
-        assert m["service_id"] == "ME4-YOUTUBE"
+        assert m["id"] == settings.service_id
+        assert m["version"] == settings.service_version
         # Manifest zeigt settings.worker_count (Test: WORKER_COUNT=1)
-        from app.config import settings
         assert m["loadbalancer"]["pool_size"] == settings.worker_count
         assert m["loadbalancer"]["strategy"] == settings.loadbalancer_strategy
         assert "ports" in m

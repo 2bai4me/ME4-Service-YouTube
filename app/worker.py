@@ -18,6 +18,7 @@ from fastapi import Depends, FastAPI, HTTPException
 from fastapi.responses import JSONResponse
 
 from app.auth import verify_http_key
+from app.config import settings
 from app.orchestrator import Orchestrator
 from app.status_tracker import status_tracker
 
@@ -41,7 +42,7 @@ class Worker:
     def _build_app(self) -> FastAPI:
         app = FastAPI(
             title=f"ME4-YouTube Worker {self.worker_id}",
-            version="1.0.0",
+            version=settings.service_version,
         )
 
         @app.get("/")

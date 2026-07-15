@@ -251,8 +251,8 @@ class ZMQService:
         functions, buttons, …) so the ME4-UI Baustein can render the
         service without any pre-registration.  Buttons carry the full
         binding info (path, method, bodyTemplate, function, stage,
-        produces) — the Baustein uses this to render the 10-button bar
-        and to wire the pipeline.
+        produces) — the Baustein uses this to render the 4-button bar
+        (the 4 core data-extraction functions) and to wire the pipeline.
         """
         return {
             # ─── service identity ────────────────────────────────────────
@@ -276,7 +276,7 @@ class ZMQService:
                 f"👋 Willkommen beim Service {settings.service_name}\n"
                 f"Version: {settings.service_version}\n"
                 "\n"
-                "Dieser Service lädt YouTube-Inhalte über **sechs "
+                "Dieser Service lädt YouTube-Inhalte über **vier "
                 "Top-Level-Funktionen**. Klicke oben einen Button, um die "
                 "zugehörige Pipeline zu starten."
             ),
@@ -339,12 +339,6 @@ class ZMQService:
                 {"slot": 1, "label": "Get Transcript",     "function": "transcript", "target": {"method": "POST", "path": "/api/transcript", "bodyTemplate": {"url": "", "language": "de"}}},
                 {"slot": 2, "label": "Get Comments",       "function": "comments",   "target": {"method": "POST", "path": "/api/comments",   "bodyTemplate": {"url": "", "max_comments": 100}}},
                 {"slot": 3, "label": "Download",           "function": "download",   "target": {"method": "POST", "path": "/api/download",   "bodyTemplate": {"url": "", "audio_only": False}}},
-                {"slot": 4, "label": "Process",            "function": "process",    "target": {"method": "POST", "path": "/api/process",    "bodyTemplate": {"url": ""}}},
-                {"slot": 5, "label": "Trigger SM-Producer","function": "smproducer", "target": {"method": "POST", "path": "/api/sm-produce", "bodyTemplate": {"url": ""}}},
-                {"slot": 6, "label": "Ask PI-Agent",       "target": {"method": "POST", "path": "/__pi_agent__", "bodyTemplate": {"message": "Suggest which of my available YouTube functions fits a typical 'fetch URL → captions → slides → export' workflow and why."}}},
-                {"slot": 7, "label": "Open Notes",         "target": {"method": "GET",  "path": "/notes/export"}},
-                {"slot": 8, "label": "Open Log",           "target": {"method": "GET",  "path": "/log/recent"}},
-                {"slot": 9, "label": "Reset Session",      "target": {"method": "POST", "path": "/session/reset"}},
             ],
 
             # ─── legacy / informational ──────────────────────────────────

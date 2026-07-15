@@ -361,6 +361,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Gezielte Manifest-Regressionen: 2 passed.
 - Vollstaendige Suite: 184 passed.
 
+## [1.3.0] - 2026-07-15
+
+### Removed
+- 6 of 10 UI buttons from the Baustein manifest: Process, Trigger SM-Producer, Ask PI-Agent, Open Notes, Open Log, Reset Session. The YouTube service now exposes only its 4 core data-extraction functions (Get Metadata, Get Transcript, Get Comments, Download) to the Baustein. The corresponding backend endpoints remain in place for direct callers; only the manifest advertisement is dropped.
+ (feat(service): drop unused Process / SM-Producer / PI-Agent / Notes / Log / Reset buttons)
+
 ## [Unreleased]
 
 

@@ -80,7 +80,7 @@ class TestFirstCallWritesReadme:
         assert "ME4-YOUTUBE" in body, (
             f"service id not in readme: {body[:200]}"
         )
-        assert "1.2.0" in body, f"service version not in readme: {body[:200]}"
+        assert "1.2.001" in body, f"service version not in readme: {body[:200]}"
 
     def test_first_call_has_created_at_and_updated_at(self, isolated_data_dir):
         sid = "sid-first-ts"
@@ -132,7 +132,7 @@ class TestFirstCallWritesReadme:
         meta = json.loads(_read_text(meta_path))
         assert meta["session_id"] == sid
         assert meta["service_id"] == "ME4-YOUTUBE"
-        assert meta["service_version"] == "1.2.0"
+        assert meta["service_version"] == "1.2.001"
         assert isinstance(meta["calls"], list)
         assert len(meta["calls"]) == 1
         assert meta["calls"][0]["function_name"] == "get-metadata"

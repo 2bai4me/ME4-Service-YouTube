@@ -1,6 +1,6 @@
 # ME4-YouTube — Funktions- & UI-Katalog
 
-> **Service:** `ME4-YOUTUBE` v1.0.0
+> **Service:** `ME4-YOUTUBE` v1.2.001
 > **Kategorie:** `content_extraction` (MCP-Server + ZMQ + HTTP + Framie)
 > **Subtitle:** *YouTube → Captions → Sections → Slides*
 > **Generiert aus:** `app/zmq_service.py` (Manifest), `app/http_api.py` (HTTP-Routen), `app/loadbalancer.py` (LB-Socket), `app/worker.py` (Worker-Sub-Prozesse), `static/index.html` + `app.js` (Framie-UI), `main.py` (CLI).

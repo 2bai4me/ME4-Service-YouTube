@@ -1,7 +1,7 @@
 # SERVICE.md — ME4-YouTube
 
 > **Service-ID:** `ME4-YOUTUBE`  
-> **Version:** 1.0.0  
+> **Version:** 1.2.001
 > **Status:** ✅ MCP + ZMQ + Framie konform  
 > **Standard:** [MCP_ZMQ_STANDARD.md](./MCP_ZMQ_STANDARD.md)
 
@@ -192,7 +192,7 @@ Siehe [`.env.example`](.env.example) für alle Optionen.
 - [x] ZMQ REQ/REP mit JSON-RPC 2.0 (Hauptservice + Loadbalancer)
 - [x] `tools/list` und `tools/call` unterstützt
 - [x] API-Key Auth (HMAC-compare, constant-time)
-- [x] Service-ID und Version definiert (`ME4-YOUTUBE` v1.0.0)
+- [x] Service-ID und Version definiert (`ME4-YOUTUBE` v1.2.001)
 - [x] UI-Manifest für Cockpit (`/api/manifest`)
 - [x] `ping`, `get_manifest`, `health`, `shutdown` Tools
 - [x] `SERVICE.md`, `AGENT.md`, `MCP_ZMQ_STANDARD.md`

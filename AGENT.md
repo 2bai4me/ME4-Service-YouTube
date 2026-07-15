@@ -1,7 +1,7 @@
 # AGENT.md — ME4-YouTube
 
 > **Service-ID:** `ME4-YOUTUBE`  
-> **Version:** `1.0.0`  
+> **Version:** `1.2.001`
 > **Schnittstellen:** MCP (stdio + ZMQ REQ/REP) + HTTP/REST + Framie-UI  
 > **ZMQ Port Main:** `5570`  
 > **ZMQ Port Loadbalancer:** `5571`  

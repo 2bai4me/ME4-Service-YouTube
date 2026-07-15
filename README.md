@@ -10,7 +10,7 @@
 
 
 > **Service-ID:** `ME4-YOUTUBE`  
-> **Version:** 1.0.0  
+> **Version:** 1.2.001
 > **Schnittstellen:** MCP (stdio + ZMQ REQ/REP) + HTTP/REST + Framie-UI
 
 YouTube Content Extraction Service für die ME4-Suite:

@@ -13,7 +13,7 @@ class TestConfig:
     def test_defaults(self):
         s = Settings(api_key="test")
         assert s.service_id == "ME4-YOUTUBE"
-        assert s.service_version == "1.2.0"
+        assert s.service_version == "1.2.001"
         assert s.worker_count >= 1
         assert s.worker_count <= 20
 

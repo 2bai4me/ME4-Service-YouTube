@@ -56,7 +56,7 @@
 
 ## 2. UI-Button-Leiste (4 Slots)
 
-Die Button-Leiste wird vom **ME4-UI-Baustein** aus dem Service-Manifest (`GET /api/manifest`) gerendert. Die 4 Slots decken die 4 logischen Kernfunktionen ab (Datengewinnung). Die früher zusätzlich im Manifest beworbenen Buttons **Process**, **Trigger SM-Producer**, **Ask PI-Agent**, **Open Notes**, **Open Log** und **Reset Session** wurden mit v1.3.0 entfernt (Variante A — radikal). Die zugehörigen HTTP-Endpunkte (`/api/process`, `/api/sm-produce`) bleiben für direkte Aufrufer weiterhin erreichbar; nur die UI-Werbung im Baustein-Manifest ist entfallen.
+Die Button-Leiste wird vom **ME4-UI-Baustein** aus dem Service-Manifest (`GET /api/manifest`) gerendert. Die 4 Slots decken die 4 logischen Kernfunktionen ab (Datengewinnung). Die früher zusätzlich im Manifest beworbenen Buttons **Process**, **Trigger SM-Producer**, **Ask PI-Agent**, **Open Notes**, **Open Log** und **Reset Session** wurden mit v1.02.008 entfernt (Variante A — radikal). Die zugehörigen HTTP-Endpunkte (`/api/process`, `/api/sm-produce`) bleiben für direkte Aufrufer weiterhin erreichbar; nur die UI-Werbung im Baustein-Manifest ist entfallen.
 
 | Slot | Button-Name (UI) | Funktion | HTTP-Call | Body-Template (Defaults) | Status |
 |:---:|---|---|---|---|:---:|
@@ -84,7 +84,7 @@ Die Button-Leiste wird vom **ME4-UI-Baustein** aus dem Service-Manifest (`GET /a
 
 ## 3. Funktionen mit UI-Step-Flow (4 logische Funktionen)
 
-Jede Funktion hat einen deklarativen Step-Flow (`functions[].steps` im Manifest), der im UI als animierte Step-Liste angezeigt wird, sobald die Funktion läuft. Die Schritte kommen mit Icon + Beschreibung. Der Service bietet darüber hinaus zwei weitere MCP-/HTTP-Funktionen (`process`, `trigger_sm_produce`) an, die mit v1.3.0 aus dem UI-Manifest entfernt wurden — siehe [§8 Removed buttons](#removed-buttons-v130).
+Jede Funktion hat einen deklarativen Step-Flow (`functions[].steps` im Manifest), der im UI als animierte Step-Liste angezeigt wird, sobald die Funktion läuft. Die Schritte kommen mit Icon + Beschreibung. Der Service bietet darüber hinaus zwei weitere MCP-/HTTP-Funktionen (`process`, `trigger_sm_produce`) an, die mit v1.02.008 aus dem UI-Manifest entfernt wurden — siehe [§8 Removed buttons](#removed-buttons-v102008).
 
 ### 3.1 `metadata` — *Get Metadata*
 
@@ -358,9 +358,9 @@ python main.py --mcp-stdio
 
 ## 8. Hinweise & Caveats
 
-### Removed buttons (v1.3.0)
+### Removed buttons (v1.02.008)
 
-Mit v1.3.0 wurden 6 von 10 UI-Buttons aus dem Baustein-Manifest entfernt („Variante A — radikal"):
+Mit v1.02.008 wurden 6 von 10 UI-Buttons aus dem Baustein-Manifest entfernt („Variante A — radikal"):
 
 | Slot | Button | Ziel | Status |
 |:---:|---|---|---|

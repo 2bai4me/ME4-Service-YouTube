@@ -3,7 +3,7 @@ r"""Tests fuer ``app.response_contract::build_summary`` + ``app.session_store.wr
 
 Vertrag (Spec Top-Level-Response):
   - ``dirAbsolute`` / ``filesSavedTo`` / ``resultsDir`` zeigen alle drei
-    auf dasselbe ``<WORK_DIR>/sessions/<safe_sid>/results/``-Verzeichnis
+    auf dasselbe ``<WORK_DIR>/session/<safe_sid>/results/``-Verzeichnis
     in Windows-URL-Form (forward-slashes, absolut, kein ``file://``).
   - ``files[]``: nur die Dateien des aktuellen Resultsets (regex-gefiltert
     via ``_RESULT_RE``); ``Notes.md``, Verzeichnisse und
@@ -83,8 +83,8 @@ class TestDirAbsolutePointsToResults:
         assert s["dirAbsolute"].endswith("/results"), (
             f"dirAbsolute endet nicht auf /results: {s['dirAbsolute']!r}"
         )
-        # Genauer Pfad: tmp_path / sessions / sid-x / results
-        expected = (tmp_path / "sessions" / "sid-x" / "results").resolve()
+        # Genauer Pfad: tmp_path / session / sid-x / results
+        expected = (tmp_path / "session" / "sid-x" / "results").resolve()
         assert s["dirAbsolute"] == to_windows_url(expected)
 
     def test_dirabsolute_alias_filesavedto(self, isolated_data_dir):
@@ -287,7 +287,7 @@ class TestFilesListFiltersToResultset:
         s = build_summary("get-metadata", result, session_id=sid)
         assert len(s["files"]) == 1
         f = s["files"][0]
-        assert set(f.keys()) == {"name", "size", "mtimeMs"}
+        assert set(f.keys()) == {"name", "size", "mtimeMs", "path", "openUrl"}
         assert f["name"] == f"{sid}.01result.json"
         assert f["size"] >= 7  # '{"k":1}'.__len__() = 7
         assert isinstance(f["mtimeMs"], int)

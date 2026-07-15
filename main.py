@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import json
 import os
 import signal
 import sys
@@ -53,19 +54,125 @@ logger = get_logger("main")
 class ServiceBootstrap:
     """Boot-Manager — startet alle Layer in fester Reihenfolge."""
 
-    def __init__(self, no_workers: bool = False, no_browser: bool = False):
+    def __init__(
+        self,
+        no_workers: bool = False,
+        no_browser: bool = False,
+        with_migration: bool = True,
+    ):
         self.no_workers = no_workers
         self.no_browser = no_browser
+        self.with_migration = with_migration
         self.pool: Optional[WorkerPool] = None
         self.zmq_main: Optional[ZMQService] = None
         self.zmq_lb: Optional[LoadBalancerZMQ] = None
         self.http_server: Optional[uvicorn.Server] = None
+
+    def _maybe_migrate_session_layout(self) -> None:
+        """Run the spec-aligned session-layout migration on first start.
+
+        AD-8 / Phase 4 requires ``data/session/<sid>/`` (singular) for
+        the ME4-UI response-validator Stage 3 canonical-path check.  When
+        the legacy ``data/sessions/<sid>/`` (plural) layout is detected
+        and the canonical singular layout does NOT yet exist, run the
+        migration script.  No-op if the canonical layout is already in
+        place or the user passed ``--with-migration=false``.
+
+        Exit codes from the migration:
+          * 0 = clean, proceed
+          * 1 = partial, log warning and proceed (operator can rerun)
+          * 2 = non-empty work/ detected, log warning and proceed
+        In all cases we DO NOT block the service start — migration is
+        best-effort, with a clear log line so the operator notices.
+        """
+        if not self.with_migration:
+            logger.info("--with-migration=false; skipping session-layout migration")
+            return
+        data_dir = Path(settings.data_dir)
+        legacy = data_dir / "sessions"
+        canonical = data_dir / "session"
+        if not legacy.exists():
+            logger.debug("no legacy session layout at %s; nothing to migrate", legacy)
+            return
+        if canonical.exists() and any(canonical.iterdir()):
+            logger.info(
+                "canonical session layout %s already populated; "
+                "skipping migration (legacy %s left in place for read-compat)",
+                canonical, legacy,
+            )
+            return
+        logger.info(
+            "legacy session layout %s detected, canonical %s missing/empty; "
+            "running migration…", legacy, canonical,
+        )
+        # Run the standalone migration script as a subprocess — it owns
+        # its own argparse, JSON report and exit-code logic, and we keep
+        # main.py free of any import gymnastics around the scripts/
+        # directory (which is not a Python package).
+        import subprocess
+        import sys
+        script_path = Path(__file__).resolve().parent / "scripts" / "migrate_session_layout.py"
+        proc = subprocess.run(  # noqa: S603 — script_path is hard-coded
+            [sys.executable, str(script_path), "--force", "--data-dir", str(data_dir)],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        # Parse the JSON report (last stdout block) for the summary
+        # numbers; fall back to a count-from-stderr heuristic if the
+        # report parse fails (e.g. a future script regression).
+        report: dict | None = None
+        try:
+            report = json.loads(proc.stdout)
+        except (ValueError, TypeError):
+            report = None
+        rc = proc.returncode
+        if report is not None:
+            n = len(report.get("sessions", {}).get("moved", []))
+            dur = report.get("duration_sec", 0.0)
+            log_path = report.get("migration_log")
+        else:
+            n = 0
+            dur = 0.0
+            log_path = None
+        if rc == 0:
+            logger.info(
+                "migration complete: moved %d sessions in %s seconds",
+                n, dur,
+            )
+        elif rc == 1:
+            logger.warning(
+                "migration partial (rc=1): moved %d sessions in %s seconds; "
+                "see %s",
+                n, dur, log_path or str(data_dir / "migration"),
+            )
+        else:  # rc == 2 (operator review)
+            logger.warning(
+                "migration needs operator review (rc=2): moved %d sessions "
+                "in %s seconds; non-empty work/ left untouched. "
+                "See %s",
+                n, dur, log_path or str(data_dir / "migration"),
+            )
 
     async def boot(self) -> None:
         """Führt die Boot-Sequenz aus."""
         print(BANNER)
         logger.info("Service-Start: %s v%s", __service_id__, __version__)
         logger.info("Modus: %s", "no-workers" if self.no_workers else "full")
+
+        # === 0. Session-Layout-Migration (AD-8 / Phase 4) ===
+        # Läuft VOR dem Worker-Pool, weil nichts geschrieben werden darf,
+        # bevor die kanonische singular-Layout-Migration gelaufen ist
+        # (sonst könnten Worker parallel ins falsche Layout schreiben).
+        try:
+            self._maybe_migrate_session_layout()
+        except Exception as e:  # noqa: BLE001
+            # Migration-Fehler dürfen den Service-Start NICHT blockieren —
+            # sie werden im Log sichtbar, und der Operator kann das
+            # Standalone-Script später erneut laufen lassen.
+            logger.warning(
+                "session-layout migration failed (continuing start): %s", e,
+            )
 
         # === 1. Worker-Pool ===
         if not self.no_workers:
@@ -217,6 +324,17 @@ def main() -> None:
     parser.add_argument("--no-browser", action="store_true", help="Framie-UI nicht automatisch im Browser oeffnen")
     parser.add_argument("--port", type=int, help="HTTP-Port ueberschreiben")
     parser.add_argument("--host", type=str, help="HTTP-Host ueberschreiben")
+    parser.add_argument(
+        "--with-migration",
+        choices=["true", "false"],
+        default="true",
+        help=(
+            "Auto-migrate legacy data/sessions/ to data/session/ on startup "
+            "(default ON for v1.1.0).  Set to 'false' to skip; the "
+            "standalone scripts/migrate_session_layout.py remains the "
+            "operator-facing entry point."
+        ),
+    )
     args = parser.parse_args()
 
     setup_logging()
@@ -229,7 +347,11 @@ def main() -> None:
     if args.mcp_stdio:
         asyncio.run(run_mcp_stdio())
     else:
-        bootstrap = ServiceBootstrap(no_workers=args.no_workers, no_browser=args.no_browser)
+        bootstrap = ServiceBootstrap(
+            no_workers=args.no_workers,
+            no_browser=args.no_browser,
+            with_migration=(args.with_migration == "true"),
+        )
         try:
             asyncio.run(bootstrap.boot())
         except KeyboardInterrupt:

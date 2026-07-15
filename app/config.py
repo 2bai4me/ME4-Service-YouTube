@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     # === Service-Identität ===
     service_id: str = "ME4-YOUTUBE"
     service_name: str = "ME4-YouTube"
-    service_version: str = "1.0.5"
+    service_version: str = "1.1.0"
 
     # === Ports (gemäß MCP_ZMQ_STANDARD Port-Bereiche) ===
     # 0 = "any free port" (für Tests, OS weist automatisch zu)
@@ -34,6 +34,22 @@ class Settings(BaseSettings):
     # Plattform-portabel; per .env / Umgebungsvariable überschreibbar:
     #   DATA_DIR=./data
     data_dir: str = Field(default="./data")
+
+    # === Pfad-Translation (WSL/Linux-Frontend -> Windows-Browser) ===
+    # Wenn True, werden Pfade die mit /mnt/<drive>/ beginnen in
+    # Windows-Pfade <drive>:\ umgeschrieben (fuer UI im Windows-Browser
+    # bei WSL-Backend).  Default: False (Linux-natives Pfadformat).
+    # Ueberschreibbar per Env-Variable WINDOWS_PATH_TRANSLATION=true oder
+    # via .env.  Siehe ``app/path_utils.to_platform_path``.
+    windows_path_translation: bool = Field(
+        default=False,
+        description=(
+            "Wenn True, werden Pfade die mit /mnt/<drive>/ beginnen in "
+            "Windows-Pfade <DRIVE>:\\\\ umgeschrieben (fuer UI im "
+            "Windows-Browser bei WSL-Backend). Default: False (Linux-natives "
+            "Pfadformat)."
+        ),
+    )
 
     # === Auth ===
     api_key: str = Field(default="", description="API-Key, falls leer = offen (nur dev)")

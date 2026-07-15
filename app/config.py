@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     # === Service-Identität ===
     service_id: str = "ME4-YOUTUBE"
     service_name: str = "ME4-YouTube"
-    service_version: str = "1.1.0"
+    service_version: str = "1.2.0"
 
     # === Ports (gemäß MCP_ZMQ_STANDARD Port-Bereiche) ===
     # 0 = "any free port" (für Tests, OS weist automatisch zu)

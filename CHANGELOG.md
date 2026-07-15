@@ -250,7 +250,64 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   mindestens eine Minor-Release.  Writes gehen IMMER in das
   kanonische singular-Layout.
 
+## [1.2.0] - 2026-07-15
+
+### Added
+- **`feat(service): auto-write session_readme.txt`** — In jedem
+  Session-Verzeichnis wird beim ersten ``write_result``-Call eine
+  ``session_readme.txt`` angelegt und bei jedem weiteren Call
+  vollstaendig neu geschrieben (atomic temp + ``os.replace``).
+  Inhalte:
+    * Session-Header mit ``service_id``, ``service_version``,
+      ``session_id``, ``Created`` (vom ersten Call) und
+      ``Last updated`` (vom aktuellsten Call).
+    * ``## What this folder contains`` — Beschreibung des Layouts
+      (Notes.md, results/, die Readme selbst, das Sidecar-JSON).
+    * ``## Calls`` — Tabelle ``NN | function | timestamp | input``
+      mit allen bisherigen Calls der Session.
+    * ``## Video context`` — URL + video_id + title, NUR fuer
+      YouTube-Calls (function_name in YT-Set oder URL matched YouTube
+      Hostnames); erscheint nur einmalig aus dem ersten
+      Metadata-Resultat.
+    * ``## Resource context`` — Raw-Request-Body minus ``sessionId``,
+      gerendert fuer nicht-YouTube-Services (service-agnostisch:
+      funktioniert fuer me4-transkript, me4-splitter, me4-slides etc.
+      ohne Hardcoding).
+    * ``## Files in results/`` — ``ls -la``-style listing mit
+      Groesse + mtime.
+  Sidecar ``session_readme_meta.json`` haelt dieselben Daten
+  machine-readable, so dass die Readme jederzeit rekonstruierbar ist.
+  Helper ``write_session_readme(session_id, function_name, result,
+  request)`` ist service-agnostisch, akzeptiert beide Layouts
+  (canonical + legacy via ``resolve_session_dir``), und ist
+  best-effort: jeder Fehler wird nur als WARNING geloggt -- der
+  ``write_result``-Pfad wird NIE blockiert.  ``write_result`` ruft
+  den Helper nach erfolgreichem Schreiben der drei Resultset-Dateien
+  auf.  UTF-8 + LF newlines (kein CRLF).
+- **25 neue Tests** in ``tests/test_session_readme.py`` (alle gruen):
+  * Erster Call erzeugt Readme mit Header + initialer Row
+  * Zweiter Call rewritet Readme mit beiden Calls in der Tabelle
+  * YouTube-Call rendert ``## Video context`` (URL + video_id + title)
+  * Non-YouTube-Call (``function_name="my-custom-fn"``) faellt auf
+    ``## Resource context`` zurueck
+  * File-Listing nutzt echte Dateinamen (``*.01result.json`` etc.)
+  * Legacy-Layout (``data/sessions/<sid>/``) wird akzeptiert
+  * Atomic-Write hinterlaesst keine ``.tmp``-Files
+  * Readme-Failure raised NICHT (best-effort + write_result ueberlebt)
+  * UTF-8 + LF (kein CRLF) verriegelt
+- **Version-Spiegel**: 5 Spiegelorte + ``tests/test_config.py`` auf
+  ``1.2.0`` (pyproject.toml, app/__init__.py, app/config.py,
+  services/me4-youtube.service.json, CHANGELOG.md,
+  test_config.test_defaults).
+
+### Notes
+- Verifikation: ``pytest tests/`` -> 180 passed, 2 pre-existing failed
+  (manifest-tests, dokumentiert in 1.0.6-Notes / out-of-scope).
+- Vollstaendige Suite inkl. neuer Regression-Checks:
+  ``pytest tests/test_session_readme.py -v`` -> 25 passed.
+
 ## [Unreleased]
+
 
 ### Fixed
 - `fix(service): correct next_function_index parser (F-05)` —

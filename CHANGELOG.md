@@ -331,35 +331,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (zwei neue: ``TestNNColumnRendersRealNN``,
   ``TestNNStableAcrossRewrite``).
 
-## [1.2.001] - 2026-07-15
+## [1.02.008] - 2026-07-15
 
-### Fixed
-- **Manifest-Vertragstests an den gueltigen Envelope angepasst** —
-  ``tests/test_http_api.py::TestHTTPApi::test_manifest`` prueft
-  ``service_id`` und ``version`` jetzt unter
-  ``service_bus_manifest`` und verifiziert die Versionsgleichheit zum
-  verschachtelten ``baustein_manifest``. Der Loadbalancer-Block wird
-  dort geprueft, wo der bestehende Union-Vertrag ihn liefert: unter
-  ``baustein_manifest``. Der ZMQ-Test prueft entsprechend den direkten
-  Baustein-Vertrag mit ``id``, ``version`` und ``loadbalancer``. Es
-  wurde kein zusaetzlicher Top-Level-Key eingefuehrt und der produktive
-  API-Vertrag bleibt unveraendert.
-
-### Changed
-- **Kanonischer Runtime-Patch-Bump ``1.2.0`` -> ``1.2.001``** —
-  zentrale Version und alle Spiegelorte wurden synchronisiert:
-  ``pyproject.toml``, ``app/__init__.py``, ``app/config.py``,
-  ``services/me4-youtube.service.json`` und die zugehoerigen Tests.
-  Der ``SERVICE_VERSION``-Override in ``.env.example`` und im
-  ``Dockerfile`` sowie Worker-, Loadbalancer-, READY-Banner-,
-  Framie-Fallback- und Dokumentationsanzeigen nutzen ebenfalls den
-  kanonischen Stand. Die zuvor nicht deklarierte Runtime-Abhaengigkeit
-  ``markdown`` ist jetzt in ``requirements.txt`` enthalten. Kein
-  MAJOR- oder SUB-Bump.
-
-### Verified
-- Gezielte Manifest-Regressionen: 2 passed.
-- Vollstaendige Suite: 184 passed.
+### Removed
+- 6 of 10 UI buttons from the Baustein manifest: Process, Trigger SM-Producer, Ask PI-Agent, Open Notes, Open Log, Reset Session. The YouTube service now exposes only its 4 core data-extraction functions (Get Metadata, Get Transcript, Get Comments, Download) to the Baustein. The corresponding backend endpoints remain in place for direct callers; only the manifest advertisement is dropped.
 
 ## [Unreleased]
 

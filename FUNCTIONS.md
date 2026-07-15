@@ -11,8 +11,8 @@
 ## Inhalt
 
 1. [Übersicht — was kann der Service?](#1-übersicht--was-kann-der-service)
-2. [UI-Button-Leiste (10 Slots)](#2-ui-button-leiste-10-slots)
-3. [Funktionen mit UI-Step-Flow (6 logische Funktionen)](#3-funktionen-mit-ui-step-flow-6-logische-funktionen)
+2. [UI-Button-Leiste (4 Slots)](#2-ui-button-leiste-4-slots)
+3. [Funktionen mit UI-Step-Flow (4 logische Funktionen)](#3-funktionen-mit-ui-step-flow-4-logische-funktionen)
 4. [HTTP-API (16 Endpunkte)](#4-http-api-16-endpunkte)
 5. [ZMQ-Kommandos (Main 5570 + Loadbalancer 5571)](#5-zmq-kommandos-main-5570--loadbalancer-5571)
 6. [CLI-Flags (`main.py`)](#6-cli-flags-mainpy)
@@ -54,11 +54,9 @@
 
 ---
 
-## 2. UI-Button-Leiste (10 Slots)
+## 2. UI-Button-Leiste (4 Slots)
 
-Die Button-Leiste wird vom **ME4-UI-Baustein** aus dem Service-Manifest (`GET /api/manifest`) gerendert. Die 10 Slots decken die 6 logischen Funktionen + 4 Utility-Actions ab.
-
-> **⚠️ Implementierungsstand:** Die Slots **0–5** (Funktions-Buttons) sind voll funktional. Die Slots **6–9** (Utility-Buttons) sind im Manifest deklariert, ihre Ziel-Routen existieren **aktuell nicht** im HTTP-API — siehe [§8 Caveats](#8-hinweise--caveats).
+Die Button-Leiste wird vom **ME4-UI-Baustein** aus dem Service-Manifest (`GET /api/manifest`) gerendert. Die 4 Slots decken die 4 logischen Kernfunktionen ab (Datengewinnung). Die früher zusätzlich im Manifest beworbenen Buttons **Process**, **Trigger SM-Producer**, **Ask PI-Agent**, **Open Notes**, **Open Log** und **Reset Session** wurden mit v1.02.008 entfernt (Variante A — radikal). Die zugehörigen HTTP-Endpunkte (`/api/process`, `/api/sm-produce`) bleiben für direkte Aufrufer weiterhin erreichbar; nur die UI-Werbung im Baustein-Manifest ist entfallen.
 
 | Slot | Button-Name (UI) | Funktion | HTTP-Call | Body-Template (Defaults) | Status |
 |:---:|---|---|---|---|:---:|
@@ -66,14 +64,8 @@ Die Button-Leiste wird vom **ME4-UI-Baustein** aus dem Service-Manifest (`GET /a
 | **1** | **Get Transcript** | `transcript` | `POST /api/transcript` | `{ "url": "", "language": "de" }` | ✅ aktiv |
 | **2** | **Get Comments** | `comments` | `POST /api/comments` | `{ "url": "", "max_comments": 100 }` | ✅ aktiv |
 | **3** | **Download** | `download` | `POST /api/download` | `{ "url": "", "audio_only": false }` | ✅ aktiv |
-| **4** | **Process** | `process` | `POST /api/process` | `{ "url": "" }` | ✅ aktiv |
-| **5** | **Trigger SM-Producer** | `smproducer` | `POST /api/sm-produce` | `{ "url": "" }` | ✅ aktiv |
-| **6** | **Ask PI-Agent** | — | `POST /__pi_agent__` | `{ "message": "Suggest which of my available YouTube functions fits a typical 'fetch URL → captions → slides → export' workflow and why." }` | ⚠️ Stub |
-| **7** | **Open Notes** | — | `GET /notes/export` | — | ⚠️ Stub |
-| **8** | **Open Log** | — | `GET /log/recent` | — | ⚠️ Stub |
-| **9** | **Reset Session** | — | `POST /session/reset` | — | ⚠️ Stub |
 
-### Klick-Flow im ME4-UI (Slots 0–5)
+### Klick-Flow im ME4-UI (Slots 0–3)
 
 1. User klickt Button.
 2. Baustein öffnet ein **Formular-Modal** mit den Feldern aus `bodyTemplate` (`url` ist immer Pflicht, weitere optional je nach Funktion).
@@ -81,22 +73,18 @@ Die Button-Leiste wird vom **ME4-UI-Baustein** aus dem Service-Manifest (`GET /a
 4. Baustein ruft den HTTP-Endpoint mit `X-API-Key` (sofern in `.env` gesetzt).
 5. **Modal zeigt Loading-State** (Spinner auf Submit-Button, Modal bleibt offen).
 6. Response kommt zurück:
-   - **200 + `_summary`** → Modal zeigt **Ergebnis-Card** (`headline.success=true`, Titel, Kanal, …). Bei `process` zusätzlich: `download_path`, `transcript_segments`, `comments_count`, `_persistence.id`.
+   - **200 + `_summary`** → Modal zeigt **Ergebnis-Card** (`headline.success=true`, Titel, Kanal, …).
    - **200 + `awaitInput`** → Server hat Pflichtfeld vermisst; Modal **rendert sich neu** mit dem `awaitInput.fields`-Array als Eingabefelder (z. B. URL nachfragen).
    - **400** → Inline-Error im Modal: `"Keine gueltige YouTube-URL"` o. ä.
    - **500/502/503** → Modal zeigt Fehlertext + Schließen-Button; User kann erneut absenden.
 7. **Bei Erfolg:** Ergebnis-Button *"In Session übernehmen"* (schreibt JSON nach `data/sessions/<sid>/<NN>-<function>/result.{json,md,html}`).
 8. Modal kann mit `X` oder `Esc` jederzeit geschlossen werden — die eingegebenen Felder werden verworfen.
 
-### Klick-Flow im ME4-UI (Slots 6–9)
-
-Da die Ziel-Routen nicht existieren, führt der Klick zu einem **404 / Network-Error** im Baustein. Die UI muss das abfangen — eine konsistente Fehlermeldung *"Diese Aktion ist aktuell nicht verfügbar"* wird empfohlen.
-
 ---
 
-## 3. Funktionen mit UI-Step-Flow (6 logische Funktionen)
+## 3. Funktionen mit UI-Step-Flow (4 logische Funktionen)
 
-Jede Funktion hat einen deklarativen Step-Flow (`functions[].steps` im Manifest), der im UI als animierte Step-Liste angezeigt wird, sobald die Funktion läuft. Die Schritte kommen mit Icon + Beschreibung.
+Jede Funktion hat einen deklarativen Step-Flow (`functions[].steps` im Manifest), der im UI als animierte Step-Liste angezeigt wird, sobald die Funktion läuft. Die Schritte kommen mit Icon + Beschreibung. Der Service bietet darüber hinaus zwei weitere MCP-/HTTP-Funktionen (`process`, `trigger_sm_produce`) an, die mit v1.02.008 aus dem UI-Manifest entfernt wurden — siehe [§8 Removed buttons](#removed-buttons-v102008).
 
 ### 3.1 `metadata` — *Get Metadata*
 
@@ -238,89 +226,6 @@ Jede Funktion hat einen deklarativen Step-Flow (`functions[].steps` im Manifest)
 
 ---
 
-### 3.5 `process` — *Process (full pipeline)*
-
-> **Beschreibung:** Metadata → Captions → Split → Slides → Export-Deck — die **volle Pipeline** in einem Call.
-> **Pipeline-Stages:** `parse_url` → `fetch_metadata` → `fetch_captions` → `split_sections` → `build_slides` → `export_package`
-> **HTTP:** `POST /api/process`
-> **ZMQ-Tool:** `process`
-
-| # | Step-Name | Icon | Was passiert |
-|:--:|---|---|---|
-| 1 | URL aufrufen | 🔗 | Service prüft die YouTube-URL. |
-| 2 | Metadaten + Transkript abrufen | 📥 | Parallel: `yt-dlp` für Metadaten + `youtube-transcript-api` für Captions. |
-| 3 | Sektionen splitten | ✂️ | Transkript in logische Sektionen anhand von Chapters / Sentiment-Pausen zerschneiden. |
-| 4 | Slides bauen | 📊 | Pro Sektion eine Slide (Markdown-HTML) rendern. |
-| 5 | Slides exportieren | 📤 | Slides zu einem Paket (HTML / PDF / Markdown-ZIP) bündeln. |
-| 6 | Daten speichern | 💾 | Komplettes Ergebnis (Metadata + Transcript + Comments + Slides) als JSON in `data/<job_id>.json` + SQLite-Row in `data/youtube_results.db`. |
-
-**Request:**
-```json
-{
-  "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-  "download": false,
-  "download_format": "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best",
-  "audio_only": false,
-  "include_description": true,
-  "include_transcript": true,
-  "include_comments": true,
-  "language": "de",
-  "max_comments": 100,
-  "metadata_extra": {}
-}
-```
-
-**Response (200):**
-```json
-{
-  "status": "done",
-  "video_id": "dQw4w9WgXcQ",
-  "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-  "description": "…",
-  "metadata": { /* yt-dlp info_dict */ },
-  "transcript": [ { "text": "…", "start": 0.0, "duration": 4.2 }, … ],
-  "comments": [ { "id": "…", "author": "…", "text": "…", "like_count": 1234 }, … ],
-  "download_path": null,
-  "error": null,
-  "duration_sec": 213,
-  "worker_id": "worker-1",
-  "_persistence": { "id": 42, "job_id": "job-…", "json_path": "data/…/result.json", "db_path": "data/youtube_results.db" }
-}
-```
-
-**Besonderheit:** `process` ist der einzige Endpoint, der **echte Worker-Sub-Prozesse** über den Loadbalancer nutzt. Bei `--no-workers` ⇒ 503.
-
----
-
-### 3.6 `smproducer` — *Trigger SM-Producer*
-
-> **Beschreibung:** URL (und optional Transkript) an den externen SM-Producer-Orchestrator weiterreichen.
-> **Pipeline-Stages:** `forward_smproducer`
-> **HTTP:** `POST /api/sm-produce`
-> **ZMQ-Tool:** `trigger_sm_produce`
-
-| # | Step-Name | Icon | Was passiert |
-|:--:|---|---|---|
-| 1 | URL aufrufen | 🔗 | Service prüft die YouTube-URL. |
-| 2 | An SM-Producer senden | 📤 | `httpx`-Call an `http://<SM_PRODUCER_URL>/api/sm-produce`. |
-| 3 | Antwort speichern | 💾 | SM-Producer-Response (Job-ID, Status, Plan) als JSON+MD persistieren. |
-
-**Request:**
-```json
-{
-  "url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
-  "transcript": "…optionaler Pre-fetch…",
-  "language": "de",
-  "workflow": "default",
-  "sessionId": "optional"
-}
-```
-
-**Response (200):** SM-Producer-Antwort, eingepackt in `_summary` mit `function: "trigger-sm-produce"`.
-**Fehler:** `502` wenn der SM-Producer nicht erreichbar ist.
-
----
-
 ## 4. HTTP-API (16 Endpunkte)
 
 Alle Endpunkte werden vom FastAPI-App in `app/http_api.py` bereitgestellt. Auth-Pflicht via `X-API-Key`-Header wenn `API_KEY != ""` in `.env`.
@@ -453,21 +358,20 @@ python main.py --mcp-stdio
 
 ## 8. Hinweise & Caveats
 
-### ⚠️ Utility-Buttons (Slots 6–9) sind nicht implementiert
+### Removed buttons (v1.02.008)
 
-Im Manifest (`app/zmq_service.py:343-348`) sind 4 Utility-Buttons deklariert, **deren Ziel-Routen im HTTP-API fehlen**:
+Mit v1.02.008 wurden 6 von 10 UI-Buttons aus dem Baustein-Manifest entfernt („Variante A — radikal"):
 
-| Button | Ziel | Realität |
-|---|---|---|
-| **Ask PI-Agent** | `POST /__pi_agent__` | Route existiert nicht → Klick führt zu 404 / Network-Error im Baustein. |
-| **Open Notes** | `GET /notes/export` | Route existiert nicht. |
-| **Open Log** | `GET /log/recent` | Route existiert nicht. |
-| **Reset Session** | `POST /session/reset` | Route existiert nicht. |
+| Slot | Button | Ziel | Status |
+|:---:|---|---|---|
+| ~~4~~ | ~~Process~~ | `POST /api/process` | Backend-Endpoint bleibt erreichbar; nur UI-Werbung entfernt. |
+| ~~5~~ | ~~Trigger SM-Producer~~ | `POST /api/sm-produce` | Backend-Endpoint bleibt erreichbar; nur UI-Werbung entfernt. |
+| ~~6~~ | ~~Ask PI-Agent~~ | `POST /__pi_agent__` | Route existierte im HTTP-API nicht (404). |
+| ~~7~~ | ~~Open Notes~~ | `GET /notes/export` | Route existierte im HTTP-API nicht (404). |
+| ~~8~~ | ~~Open Log~~ | `GET /log/recent` | Route existierte im HTTP-API nicht (404). |
+| ~~9~~ | ~~Reset Session~~ | `POST /session/reset` | Route existierte im HTTP-API nicht (404). |
 
-**Empfohlene Maßnahmen** (zurück in den Issue-Tracker, **nicht** Teil dieses Katalogs):
-- Entweder Routen in `app/http_api.py` ergänzen (Stub mit `{"status": "not_implemented"}` reicht, um 404 zu vermeiden),
-- oder die 4 Buttons aus dem Manifest entfernen,
-- oder im ME4-UI-Baustein einen konsistenten 404-Handler einbauen.
+Die Service-Seite des ME4-Bausteins (`ME4-UI`) bekommt einen separaten PR, der die Slot-Stub-Logik entfernt und die jetzt nur 4 Buttons umfassende Button-Leiste verdrahtet. Aus UI-Sicht bleiben die 4 Kernfunktionen voll funktional.
 
 ### ⚠️ WSSP-15 Heartbeat (Slot im Manifest, in PR zur Entfernung)
 

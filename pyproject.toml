@@ -1,6 +1,6 @@
 [project]
 name = "me4-youtube"
-version = "1.2.001"
+version = "1.02.008"
 description = "ME4-YouTube — YouTube Content Extraction Service (MCP + ZMQ + HTTP + Framie)"
 requires-python = ">=3.11"
 authors = [

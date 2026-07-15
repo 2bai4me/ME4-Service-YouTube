@@ -522,6 +522,18 @@ def write_result(
     except Exception as e:  # noqa: BLE001
         logger.warning("Notes.md update failed for %s: %s", session_id, e)
 
+    # 6) Maintain session_readme.txt (v1.2.0, Phase 5) — service-agnostic
+    #    human-readable overview of the session folder.  Best-effort;
+    #    ``write_session_readme`` already catches its own errors, but we
+    #    wrap it again so a regression in either layer can NEVER block
+    #    the persistence pipeline.
+    try:
+        write_session_readme(session_id, function_name, result, request)
+    except Exception as e:  # noqa: BLE001
+        logger.warning(
+            "session_readme write failed for %s: %s", session_id, e,
+        )
+
     return result
 
 
@@ -532,6 +544,545 @@ def read_session_notes(session_id: str) -> str | None:
     if not p.exists():
         return None
     return p.read_text(encoding="utf-8")
+
+
+"""Helper code to insert into app/session_store.py (Phase 5 — session_readme)."""
+
+# ---------------------------------------------------------------------------
+# Session-Readme (v1.2.0, Phase 5) — service-agnostic human-readable overview
+# ---------------------------------------------------------------------------
+#
+# Eine ``session_readme.txt`` wird beim ersten ``write_result``-Call
+# angelegt und bei jedem weiteren Call vollstaendig neu geschrieben
+# (atomic-write via temp+rename; gleiche Konvention wie Notes.md
+# nur ohne Append-Verhalten).  Service-agnostisch: die Video-Context-
+# Section erscheint nur, wenn ein YouTube-artiger Call erkannt wird
+# (function_name in der YT-Set ODER URL enthaelt youtube.com/youtu.be);
+# sonst faellt der Block auf den generischen Resource-Context zurueck
+# (roher ``request``-Body ohne ``sessionId``).
+#
+# State lebt in einem Sidecar ``session_readme_meta.json`` neben der
+# Readme -- so ist die Readme jederzeit aus dem Sidecar + aktuellem
+# ``results/``-Listing rekonstruierbar.  Der Sidecar wird bei jedem
+# Call ueberschrieben (read-modify-write auf kleiner Datei, akzeptabel
+# weil parallel-loses Aufrufer-Muster im aktuellen write_result-Pfad).
+#
+
+# Filenames der beiden Readme-Artefakte (stabil pro Session).
+_README_FILENAME = "session_readme.txt"
+_README_META_FILENAME = "session_readme_meta.json"
+
+# Function-Names, die einen YouTube-Video-Kontext implizieren.  Andere
+# Services (z.B. me4-transkript, me4-splitter, me4-slides) rufen hier
+# nicht mit auf und bekommen automatisch den generischen
+# Resource-Context-Block.
+_YT_FUNCTION_NAMES = frozenset({
+    "get-metadata",
+    "get-transcript",
+    "get-comments",
+    "download",
+    "trigger-sm-produce",
+    "process",
+})
+
+# Hosts, die als "YouTube-Video-Resource" zaehlen.  Case-insensitive,
+# Subdomains ignoriert (matches ``m.youtube.com``).
+_YT_HOST_HINTS = (
+    "youtube.com",
+    "youtu.be",
+)
+
+
+def _is_video_call(
+    function_name: str,
+    request: dict[str, Any] | None,
+) -> bool:
+    """True if this call is YouTube-video-related (renders Video-context).
+
+    Two signals (OR-combined, weil nicht jeder Caller den function_name
+    in die YT-Set eintraegt -- z.B. ein pipeline-internes ``process``
+    vs. ein low-level ``download``):
+
+      1. ``function_name`` ist in der YT-Set, ODER
+      2. ``request.url`` enthaelt einen YouTube-Host.
+
+    Alles andere faellt auf Resource-Context zurueck (service-agnostisch).
+    """
+    if function_name in _YT_FUNCTION_NAMES:
+        return True
+    if not request:
+        return False
+    url = str(request.get("url") or "").lower()
+    if not url:
+        return False
+    return any(h in url for h in _YT_HOST_HINTS)
+
+
+def _input_summary(request: dict[str, Any]) -> dict[str, Any]:
+    """Extract a best-effort input summary from a request body.
+
+    Strips secret-ish keys (``sessionId``, ``api_key``) and keeps only
+    scalar values (str/int/float/bool) so the calls-table column stays
+    one line per call.  Used by the readme calls table and by the
+    Resource-context block (the latter takes the full request minus
+    ``sessionId``).
+    """
+    skip = {"sessionId", "api_key"}
+    out: dict[str, Any] = {}
+    for k, v in request.items():
+        if k in skip:
+            continue
+        if isinstance(v, (str, int, float, bool)):
+            out[k] = v
+    return out
+
+
+def _format_input_column(input_dict: dict[str, Any]) -> str:
+    """Render the input-dict as a one-line ``k=v`` summary for the table.
+
+    Caps at 6 pairs to keep the table readable; trailing ``...`` when
+    truncated.
+    """
+    if not input_dict:
+        return "-"
+    pairs = [f"{k}={v!r}" for k, v in list(input_dict.items())[:6]]
+    line = " ".join(pairs)
+    if len(input_dict) > 6:
+        line += " ..."
+    return line
+
+
+def _new_readme_meta(session_id: str) -> dict[str, Any]:
+    """Fresh sidecar-meta for the very first call in this session."""
+    ts = _dt.datetime.now().isoformat(timespec="seconds")
+    return {
+        "service_id": settings.service_id,
+        "service_version": settings.service_version,
+        "session_id": session_id,
+        "created_at": ts,
+        "last_updated_at": ts,
+        "calls": [],
+        "video_context": None,
+    }
+
+
+def _load_readme_meta(path: Path) -> dict[str, Any]:
+    """Load sidecar JSON; on corruption start fresh (logged warning).
+
+    We deliberately don't try to recover from a corrupted sidecar by
+    scanning ``results/`` -- the NN is recoverable but the function_name
+    and request body are not, so a partial recovery would still be
+    lossy.  Better to start fresh and let the next calls repopulate.
+    """
+    if not path.exists():
+        return {}
+    try:
+        loaded = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as e:
+        logger.warning("readme sidecar %s unreadable: %s -- starting fresh", path, e)
+        return {}
+    if not isinstance(loaded, dict):
+        logger.warning("readme sidecar %s is not a dict: %r", path, type(loaded).__name__)
+        return {}
+    return loaded
+
+
+def _atomic_write_text(path: Path, content: str) -> None:
+    """Write ``content`` to ``path`` atomically (temp + ``os.replace``).
+
+    LF line endings: we explicitly write ``content`` as-is, never
+    converting; the helpers in this module build the text with ``\n``
+    only.  On Windows, ``Path.write_text(..., encoding="utf-8",
+    newline="\n")`` would force LF; on POSIX the default is already LF.
+    """
+    tmp = path.parent / f".{path.name}.tmp"
+    try:
+        tmp.write_text(content, encoding="utf-8", newline="\n")
+        os.replace(tmp, path)
+    finally:
+        # Best-effort cleanup if rename didn't happen
+        if tmp.exists():
+            try:
+                tmp.unlink()
+            except OSError:
+                pass
+
+
+# Tail regex for the trailing ``.NNresult.{ext}`` suffix on a resultset
+# filename.  Strict ``_RESULT_RE`` (above) uses ``[^.]+`` for the sid segment
+# which BREAKS whenever the session_id contains a literal ``.`` (e.g. a
+# namespaced / video-ID-derived id like ``"abc.12345"``).  The trailing
+# pattern is stable:  ``.NNresult.{json,md,html}`` regardless of what the
+# sid segment contains.  Used by ``_current_nn_from_result`` as the
+# fallback in PATH A (filesystem-anchored, deterministic).
+_NN_TAIL_RE = re.compile(r"\.(\d{2})result\.(json|md|html)$")
+
+
+def _current_nn_from_result(
+    result: dict[str, Any],
+    results_dir: Path | None = None,
+    session_id: str | None = None,
+) -> str:
+    """Extract the NN that ``write_result`` just assigned (e.g. ``"01"``).
+
+    Robust derivation (PATH A — deterministic + filesystem-anchored,
+    selected over the cheaper regex-only path because the strict
+    ``_RESULT_RE`` does not tolerate literal ``.`` in ``session_id``):
+
+      1. Strict ``_RESULT_RE`` on ``result["jsonPath"]`` (fast path;
+         works for plain alnum sid values).
+      2. Tail-only ``_NN_TAIL_RE`` on the same basename (catches
+         ``"abc.12345.07result.json"`` shapes where the strict regex
+         cannot anchor the full filename).
+      3. Filesystem fallback: scan ``results_dir`` for the highest NN
+         across files whose name starts with ``f"{session_id}."`` and
+         matches the tail pattern.  The just-written NN IS the highest
+         NN on disk for this session, by definition (``write_result``
+         always appends the next sequence number).
+
+    Returns ``""`` when no annotation is present AND no matching file
+    is on disk.  The caller (``write_session_readme``) substitutes
+    ``"?"`` for backward compat.
+    """
+    # 1. Strict regex on jsonPath (fast path).
+    json_path = result.get("jsonPath")
+    if isinstance(json_path, str) and json_path:
+        m = _RESULT_RE.match(Path(json_path).name)
+        if m:
+            return m.group("nn")
+        # 2. Tail-only regex (sid may contain dots — strict regex fails).
+        #    Use ``search()`` because the prefix ``<sid>.`` is variable-
+        #    length and may contain ``.`` (which means ``match()`` won't
+        #    anchor us at the tail).
+        tail = _NN_TAIL_RE.search(Path(json_path).name)
+        if tail:
+            return tail.group(1)
+
+    # 3. Filesystem fallback: scan results_dir for the highest NN of
+    #    files belonging to this session.  Filter by name prefix
+    #    ``"<session_id>."`` so cross-session contamination cannot
+    #    leak into the NN cell.  Tolerates an OSError on dir scan
+    #    (best-effort: a missing results_dir must not crash the readme
+    #    writer — the outer try/except already covers this layer).
+    if results_dir is not None and session_id:
+        try:
+            if results_dir.exists() and results_dir.is_dir():
+                prefix = f"{session_id}."
+                max_idx = 0
+                for p in results_dir.iterdir():
+                    if not p.is_file():
+                        continue
+                    if not p.name.startswith(prefix):
+                        continue
+                    tail = _NN_TAIL_RE.search(p.name)
+                    if not tail:
+                        continue
+                    idx = int(tail.group(1))
+                    if idx > max_idx:
+                        max_idx = idx
+                if max_idx > 0:
+                    return f"{max_idx:02d}"
+        except OSError as e:
+            # Best-effort: a missing/unreadable results_dir is logged
+            # here; never raise.
+            logger.warning(
+                "nn scan of %s for session=%s failed: %s",
+                results_dir, session_id, e,
+            )
+
+    return ""
+
+
+def _render_readme(meta: dict[str, Any], results_dir: Path) -> str:
+    """Build the full readme text from sidecar meta + live results dir.
+
+    Sections rendered (in order):
+      1. H1 title + service metadata block (service id, version,
+         session id, created-at, last-updated-at).
+      2. ``## What this folder contains`` -- human-readable description
+         of the layout (Notes.md, results/, this readme, sidecar JSON).
+      3. ``## Calls`` -- table: NN | function_name | timestamp | input.
+      4. ``## Video context`` -- ONLY when ``meta["video_context"]`` is
+         set; URL + video_id + title.
+      5. ``## Resource context`` -- ONLY when NO video-context; raw
+         request of the LAST call minus ``sessionId``.
+      6. ``## Files in results/`` -- ls -la-style lines (size + mtime
+         + name), one per file.
+
+    Sections 4 and 5 are mutually exclusive (service-agnostic contract:
+    Video-Context faellt auf Resource-Context zurueck wenn nicht
+    anwendbar).  Either-or, never both.
+    """
+    lines: list[str] = []
+    sid = meta.get("session_id") or ""
+    svc_id = meta.get("service_id") or settings.service_id
+    svc_ver = meta.get("service_version") or settings.service_version
+    created = meta.get("created_at") or ""
+    updated = meta.get("last_updated_at") or ""
+
+    # 1. Header
+    lines.append(f"# Session `{sid}` -- README")
+    lines.append("")
+    lines.append(f"Service: `{svc_id}`  v`{svc_ver}`")
+    lines.append(f"Session id: `{sid}`")
+    lines.append(f"Created: `{created}`")
+    lines.append(f"Last updated: `{updated}`")
+    lines.append("")
+
+    # 2. What this folder contains
+    lines.append("## What this folder contains")
+    lines.append("")
+    lines.append(
+        "This folder holds all artefacts produced by calls to "
+        f"`{svc_id}` during the user's interaction with this session."
+    )
+    lines.append("")
+    lines.append(
+        "- `Notes.md` -- append-only log of every call (one H2 per "
+        "call, with URL, success marker, and links to the result files)."
+    )
+    lines.append(
+        "- `results/` -- the canonical resultset directory. Each call "
+        "writes three file-views of the same logical result here, named "
+        "`<session_id>.<NN>result.{json,md,html}`. Three file-views "
+        "count as ONE sequence; the next call gets NN+1."
+    )
+    lines.append(
+        "- `session_readme.txt` -- this file. A service-agnostic "
+        "overview of the session: metadata, call history, file "
+        "inventory, and (when applicable) video or resource context."
+    )
+    lines.append(
+        "- `session_readme_meta.json` -- sidecar JSON with the same "
+        "metadata in machine-readable form. Used to regenerate this "
+        "readme after restarts."
+    )
+    lines.append("")
+
+    # 3. Calls table
+    lines.append("## Calls")
+    lines.append("")
+    calls = meta.get("calls") or []
+    if calls:
+        lines.append(
+            "| NN  | function        | timestamp           "
+            "| input                                      |"
+        )
+        lines.append(
+            "|-----|-----------------|---------------------"
+            "|--------------------------------------------|"
+        )
+        for c in calls:
+            nn = str(c.get("nn") or "-").ljust(3)
+            fn = str(c.get("function_name") or "-")
+            ts = str(c.get("timestamp") or "-")
+            inp = _format_input_column(c.get("input") or {})
+            # Keep the table from blowing out by truncating function + input
+            fn_disp = fn if len(fn) <= 15 else fn[:12] + "..."
+            inp_disp = inp if len(inp) <= 42 else inp[:39] + "..."
+            lines.append(f"| {nn} | {fn_disp:<15} | {ts:<19} | {inp_disp:<42} |")
+        lines.append("")
+    else:
+        lines.append("_(no calls recorded yet)_")
+        lines.append("")
+
+    # 4. Video context (only if set)
+    vc = meta.get("video_context") or {}
+    rc = meta.get("resource_context") or {}
+    if vc:
+        lines.append("## Video context")
+        lines.append("")
+        if vc.get("url"):
+            lines.append(f"URL: `{vc['url']}`")
+        if vc.get("video_id"):
+            lines.append(f"Video ID: `{vc['video_id']}`")
+        if vc.get("title"):
+            lines.append(f"Title: `{vc['title']}`")
+        lines.append("")
+    elif rc:
+        # 5. Resource context (generic, service-agnostic fallback)
+        lines.append("## Resource context")
+        lines.append("")
+        lines.append("Raw request body of the most recent call (minus `sessionId`):")
+        lines.append("")
+        for k, v in rc.items():
+            lines.append(f"- `{k}`: `{v}`")
+        lines.append("")
+
+    # 6. Files in results/
+    lines.append("## Files in `results/`")
+    lines.append("")
+    lines.append("Listing (size in bytes, mtime in ISO format):")
+    lines.append("")
+    if not results_dir.exists():
+        lines.append("_(results/ directory does not exist yet)_")
+        lines.append("")
+    else:
+        # Sort: regular files only, by name (stable order across calls)
+        try:
+            entries = sorted(
+                (p for p in results_dir.iterdir() if p.is_file()),
+                key=lambda p: p.name,
+            )
+        except OSError as e:
+            lines.append(f"_(cannot list results/: {e})_")
+            entries = []
+        if not entries:
+            lines.append("_(results/ is empty)_")
+        else:
+            for p in entries:
+                try:
+                    st = p.stat()
+                    size = st.st_size
+                    mtime = _dt.datetime.fromtimestamp(st.st_mtime).isoformat(
+                        timespec="seconds"
+                    )
+                except OSError as e:
+                    lines.append(f"  {p.name}  (stat failed: {e})")
+                    continue
+                lines.append(f"  {p.name}   {size} bytes   {mtime}")
+        lines.append("")
+
+    return "\n".join(lines)
+
+
+def write_session_readme(
+    session_id: str,
+    function_name: str,
+    result: dict[str, Any],
+    request: dict[str, Any] | None = None,
+) -> None:
+    """Write/update ``session_readme.txt`` for the given session.
+
+    The readme is a service-agnostic, human-readable overview of the
+    session folder (Notes.md, results/, this readme itself, the sidecar
+    JSON, plus a per-call table and a live listing of ``results/``).
+
+    Behaviour:
+      * First call for a session: creates both ``session_readme.txt``
+        and the sidecar ``session_readme_meta.json`` from scratch.
+      * Subsequent calls: reads the sidecar, appends the new call,
+        rewrites the sidecar, and rewrites the readme in full.  The
+        rewrite is atomic (temp + ``os.replace``), so a partial readme
+        is never visible to readers.
+      * Service-agnostic: ``## Video context`` appears only when a
+        YouTube-style call is detected (``function_name`` in the YT set
+        OR URL matches YouTube hostnames); otherwise a generic
+        ``## Resource context`` block is rendered from the last call's
+        request body.
+      * Best-effort: ANY exception is caught, logged as a WARNING, and
+        swallowed -- this helper MUST NEVER block the ``write_result``
+        path.  ``write_result`` wraps the call in its own try/except
+        belt-and-suspenders as well.
+
+    Args:
+        session_id: Session identifier.  Resolved through
+            :func:`resolve_session_dir` so both canonical and legacy
+            layouts are accepted.
+        function_name: Function/tool name of the just-persisted call.
+        result: Result dict from ``write_result`` (used to read
+            ``jsonPath`` for the assigned NN, and to harvest
+            ``video_id`` / ``title`` for the first metadata call).
+        request: The original request body (used for the input-summary
+            column and for the Resource-context block).
+    """
+    if not session_id:
+        return
+
+    try:
+        base = resolve_session_dir(session_id)
+        readme_path = base / _README_FILENAME
+        meta_path = base / _README_META_FILENAME
+        results_dir = base / "results"
+
+        # 1. Load existing meta (or start fresh)
+        meta = _load_readme_meta(meta_path)
+        if not meta:
+            meta = _new_readme_meta(session_id)
+
+        ts_now = _dt.datetime.now().isoformat(timespec="seconds")
+        meta["last_updated_at"] = ts_now
+
+        # 2. Figure out which NN this call corresponds to.  After
+        #    write_result has persisted the files, ``result["jsonPath"]``
+        #    is the cheapest source of truth; fall back to scanning
+        #    ``results_dir`` (PATH A: filesystem-anchored NN derivation,
+        #    robust against ``.`` in session_id which breaks the strict
+        #    result-set regex).
+        nn = _current_nn_from_result(
+            result, results_dir=results_dir, session_id=session_id,
+        )
+        if not nn:
+            # Conservative fallback: take the highest NN currently on
+            # disk + 0 -- we don't want to invent numbers here, so we
+            # just skip the NN field rather than guess wrong.
+            nn = "?"
+
+        # 3. Build the input summary (skip secrets, scalars only)
+        req = request or {}
+        input_summary = _input_summary(req)
+
+        # 4. Append the call record
+        meta.setdefault("calls", []).append({
+            "nn": nn,
+            "function_name": function_name,
+            "timestamp": ts_now,
+            "input": input_summary,
+        })
+
+        # 5. Video-context promotion (first video call wins, never
+        #    overwritten on subsequent calls -- spec says "from first
+        #    metadata result").  We keep this in the sidecar so the
+        #    Video-context section is stable across subsequent calls
+        #    that don't carry the URL again.
+        if _is_video_call(function_name, req):
+            vc = meta.get("video_context") or {}
+            url = req.get("url")
+            vid = req.get("video_id") or result.get("video_id")
+            title = result.get("title")
+            if url and "url" not in vc:
+                vc["url"] = url
+            if vid and "video_id" not in vc:
+                vc["video_id"] = vid
+            if title and "title" not in vc:
+                vc["title"] = title
+            if vc:
+                meta["video_context"] = vc
+            # Once a video-context is established, drop any
+            # resource-context the sidecar may have carried over from a
+            # hypothetical pre-video call (defensive: shouldn't happen
+            # in practice but keeps the sidecar consistent).
+            if "resource_context" in meta:
+                del meta["resource_context"]
+        else:
+            # Generic resource-context (service-agnostic): keep the
+            # most-recent non-video request body, minus ``sessionId``,
+            # so the readme can show what the user handed the service.
+            rc: dict[str, Any] = {}
+            for k, v in req.items():
+                if k == "sessionId":
+                    continue
+                if isinstance(v, (str, int, float, bool)):
+                    rc[k] = v
+            if rc:
+                meta["resource_context"] = rc
+            # If the first call was non-video and a later call is
+            # video, the video-context branch above clears the
+            # resource-context; the sidecar converges to whichever
+            # mode the latest call set.
+
+        # 6. Render + atomic write
+        text = _render_readme(meta, results_dir)
+        _atomic_write_text(readme_path, text)
+        _atomic_write_text(meta_path, json.dumps(meta, ensure_ascii=False, indent=2))
+    except Exception as e:  # noqa: BLE001
+        # Belt-and-suspenders: ``write_result`` also wraps us in
+        # try/except, but we double-guard so a regression in the
+        # write_result path can never crash the persistence pipeline.
+        logger.warning(
+            "session_readme write failed for session=%s function=%s: %s",
+            session_id, function_name, e,
+        )
 
 
 # ─── HTML rendering ──────────────────────────────────────────────────────

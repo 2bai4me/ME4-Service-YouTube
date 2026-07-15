@@ -675,3 +675,109 @@ class TestFileFormatGuarantees:
         assert b"\r\n" not in raw, (
             f"CRLF found in readme: {raw[:200]!r}"
         )
+
+
+# ---------------------------------------------------------------------------
+# Test 10: NN cell in the Calls table renders the real sequence number
+# ---------------------------------------------------------------------------
+
+
+class TestNNColumnRendersRealNN:
+    r"""Regression for ``?``-in-NN-cell bug.
+
+    Before the fix, ``_current_nn_from_result`` could not derive the NN
+    when ``session_id`` contained a literal ``.`` (the strict
+    ``_RESULT_RE`` uses ``[^.]+`` for the sid segment which then fails
+    to anchor).  The readme Calls table then rendered ``?`` for every
+    row instead of ``01``/``02``/``03``.
+
+    After the fix (PATH A — filesystem-anchored NN derivation with a
+    tail-only regex fallback), the three rows in the Calls table
+    each carry their real ``NN`` cell.
+    """
+
+    def test_nn_column_renders_real_sequence_number(self, isolated_data_dir):
+        """The same setup as the first-call test, but with three
+        sequential ``write_result`` calls.  The three NN cells in the
+        rendered readme must match ``01``/``02``/``03``."""
+        sid = "sid-nn-real"
+        for fn in ("get-metadata", "get-transcript", "download"):
+            write_result(
+                sid, fn,
+                {"success": True, "title": fn},
+                request={"sessionId": sid,
+                         "url": "https://www.youtube.com/watch?v=abc12345"},
+            )
+        body = _read_text(get_session_dir(sid) / "session_readme.txt")
+        # Slice the Calls section only.
+        calls_section = body.split("## Calls", 1)[1].split("##", 1)[0]
+        # Every call-row in the table has one of the expected NNs.
+        import re as _re
+        nn_cells = _re.findall(r"\|\s*(\d{2}|[?])\s*\|", calls_section)
+        assert nn_cells == ["01", "02", "03"], (
+            f"NN cells not real sequence 01/02/03: {nn_cells!r} \n"
+            f"Calls section:\n{calls_section}"
+        )
+        # Sidecar records the same NN values.
+        meta = json.loads(
+            _read_text(get_session_dir(sid) / "session_readme_meta.json")
+        )
+        assert [c["nn"] for c in meta["calls"]] == ["01", "02", "03"], (
+            f"sidecar NNs not real sequence: "
+            f"{[c['nn'] for c in meta['calls']]}"
+        )
+
+# ---------------------------------------------------------------------------
+# Test 11: recomputing readme does not duplicate NN
+# ---------------------------------------------------------------------------
+
+
+class TestNNStableAcrossRewrite:
+    """Stability: when ``write_session_readme`` is invoked multiple times
+    for the same call (recovery/replay scenario), the NN cell value does
+    NOT inflate per rewrite.  Each invocation appends ONE row with the
+    same NN — the NN is derived deterministically from the on-disk file
+    ``<sid>.<NN>result.json`` (PATH A), not from an in-memory counter.
+    """
+
+    def test_recomputing_readme_does_not_duplicate_nn(
+        self, isolated_data_dir
+    ):
+        sid = "sid-stable"
+        # One real write_result, then three readme rewrites (replay).
+        write_result(
+            sid, "get-metadata",
+            {"success": True, "title": "Stable"},
+            request={"sessionId": sid,
+                     "url": "https://youtu.be/abc"},
+        )
+        for _ in range(3):
+            write_session_readme(
+                sid, "get-metadata",
+                {"success": True, "title": "Stable"},
+                request={"sessionId": sid,
+                         "url": "https://youtu.be/abc"},
+            )
+        meta = json.loads(
+            _read_text(get_session_dir(sid) / "session_readme_meta.json")
+        )
+        # Four appends total: one from write_result (which already calls
+        # write_session_readme) + three explicit replay calls.
+        assert len(meta["calls"]) == 4, (
+            f"unexpected call count: {len(meta['calls'])}"
+        )
+        # All four rows must carry the SAME NN (the on-disk file is
+        # .01result.* — PATH A is deterministic, never doubles).
+        nn_values = [c["nn"] for c in meta["calls"]]
+        assert nn_values == ["01", "01", "01", "01"], (
+            f"NN values doubled on replay: {nn_values!r}"
+        )
+        body = _read_text(get_session_dir(sid) / "session_readme.txt")
+        calls_section = body.split("## Calls", 1)[1].split("##", 1)[0]
+        # The Calls table in the rendered readme has exactly four rows,
+        # all NN=01.
+        import re as _re
+        nn_cells = _re.findall(r"\|\s*(\d{2}|[?])\s*\|", calls_section)
+        assert nn_cells == ["01", "01", "01", "01"], (
+            f"rendered NN cells not stable on replay: {nn_cells!r}"
+        )

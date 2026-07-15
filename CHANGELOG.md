@@ -300,11 +300,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   services/me4-youtube.service.json, CHANGELOG.md,
   test_config.test_defaults).
 
+### Fixed
+- **`fix(service): render real NN in session_readme.txt table`** —
+  ``session_readme.txt`` rendert in der ``## Calls``-Tabelle fuer
+  jede Zeile ``"?"`` statt der tatsaechlichen Sequenznummer
+  (``01``/``02``/``03``).  Root cause: ``_current_nn_from_result``
+  leitete das NN ausschliesslich aus ``result["jsonPath"]`` via die
+  strikte ``_RESULT_RE`` (``^[^.]+\.\d{2}result\.``) ab -- sobald
+  die ``session_id`` einen literalen ``.`` enthaelt
+  (z.B. namespaced / video-ID-derived), schlug das Regex fehl und
+  der Helper lieferte ``""``; der Aufrufer (``write_session_readme``)
+  fiel auf den ``"?"``-Fallback zurueck.  Fix: PATH A
+  (deterministisch + filesystem-verankert) -- striktes Regex bleibt
+  als Fast-Path, neue ``_NN_TAIL_RE`` deckt den Tail
+  ``.NNresult.{json,md,html}`` zuverlaessig ab, und ein
+  Filesystem-Fallback (``scan_results_dir`` auf results/, hoechstes
+  NN fuer ``<sid>.<NN>``-Praefix) repariert beliebige Sid-Formen
+  (insbesondere dotted sids).  Zwei neue Regressionstests in
+  ``tests/test_session_readme.py`` (25 -> 27 passed): NN-Spalte
+  rendert ``01``/``02``/``03`` fuer sequentielle Calls,
+  Replay-Schleife (``write_session_readme`` dreifach aufgerufen)
+  verdoppelt die NN-Spalte NICHT.  Kein Versions-Bump (bereits
+  1.2.0 auf PR #8).
+
 ### Notes
-- Verifikation: ``pytest tests/`` -> 180 passed, 2 pre-existing failed
+- Verifikation: ``pytest tests/`` -> 182 passed, 2 pre-existing failed
   (manifest-tests, dokumentiert in 1.0.6-Notes / out-of-scope).
 - Vollstaendige Suite inkl. neuer Regression-Checks:
-  ``pytest tests/test_session_readme.py -v`` -> 25 passed.
+  ``pytest tests/test_session_readme.py -v`` -> 27 passed
+  (zwei neue: ``TestNNColumnRendersRealNN``,
+  ``TestNNStableAcrossRewrite``).
 
 ## [Unreleased]
 

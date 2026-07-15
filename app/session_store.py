@@ -708,20 +708,89 @@ def _atomic_write_text(path: Path, content: str) -> None:
                 pass
 
 
-def _current_nn_from_result(result: dict[str, Any]) -> str:
+# Tail regex for the trailing ``.NNresult.{ext}`` suffix on a resultset
+# filename.  Strict ``_RESULT_RE`` (above) uses ``[^.]+`` for the sid segment
+# which BREAKS whenever the session_id contains a literal ``.`` (e.g. a
+# namespaced / video-ID-derived id like ``"abc.12345"``).  The trailing
+# pattern is stable:  ``.NNresult.{json,md,html}`` regardless of what the
+# sid segment contains.  Used by ``_current_nn_from_result`` as the
+# fallback in PATH A (filesystem-anchored, deterministic).
+_NN_TAIL_RE = re.compile(r"\.(\d{2})result\.(json|md|html)$")
+
+
+def _current_nn_from_result(
+    result: dict[str, Any],
+    results_dir: Path | None = None,
+    session_id: str | None = None,
+) -> str:
     """Extract the NN that ``write_result`` just assigned (e.g. ``"01"``).
 
-    Looks at ``result["jsonPath"]`` (set by write_result after successful
-    persistence); falls back to empty string when no annotation is present
-    (caller decides what to do).
+    Robust derivation (PATH A — deterministic + filesystem-anchored,
+    selected over the cheaper regex-only path because the strict
+    ``_RESULT_RE`` does not tolerate literal ``.`` in ``session_id``):
+
+      1. Strict ``_RESULT_RE`` on ``result["jsonPath"]`` (fast path;
+         works for plain alnum sid values).
+      2. Tail-only ``_NN_TAIL_RE`` on the same basename (catches
+         ``"abc.12345.07result.json"`` shapes where the strict regex
+         cannot anchor the full filename).
+      3. Filesystem fallback: scan ``results_dir`` for the highest NN
+         across files whose name starts with ``f"{session_id}."`` and
+         matches the tail pattern.  The just-written NN IS the highest
+         NN on disk for this session, by definition (``write_result``
+         always appends the next sequence number).
+
+    Returns ``""`` when no annotation is present AND no matching file
+    is on disk.  The caller (``write_session_readme``) substitutes
+    ``"?"`` for backward compat.
     """
+    # 1. Strict regex on jsonPath (fast path).
     json_path = result.get("jsonPath")
-    if not isinstance(json_path, str) or not json_path:
-        return ""
-    m = _RESULT_RE.match(Path(json_path).name)
-    if not m:
-        return ""
-    return m.group("nn")
+    if isinstance(json_path, str) and json_path:
+        m = _RESULT_RE.match(Path(json_path).name)
+        if m:
+            return m.group("nn")
+        # 2. Tail-only regex (sid may contain dots — strict regex fails).
+        #    Use ``search()`` because the prefix ``<sid>.`` is variable-
+        #    length and may contain ``.`` (which means ``match()`` won't
+        #    anchor us at the tail).
+        tail = _NN_TAIL_RE.search(Path(json_path).name)
+        if tail:
+            return tail.group(1)
+
+    # 3. Filesystem fallback: scan results_dir for the highest NN of
+    #    files belonging to this session.  Filter by name prefix
+    #    ``"<session_id>."`` so cross-session contamination cannot
+    #    leak into the NN cell.  Tolerates an OSError on dir scan
+    #    (best-effort: a missing results_dir must not crash the readme
+    #    writer — the outer try/except already covers this layer).
+    if results_dir is not None and session_id:
+        try:
+            if results_dir.exists() and results_dir.is_dir():
+                prefix = f"{session_id}."
+                max_idx = 0
+                for p in results_dir.iterdir():
+                    if not p.is_file():
+                        continue
+                    if not p.name.startswith(prefix):
+                        continue
+                    tail = _NN_TAIL_RE.search(p.name)
+                    if not tail:
+                        continue
+                    idx = int(tail.group(1))
+                    if idx > max_idx:
+                        max_idx = idx
+                if max_idx > 0:
+                    return f"{max_idx:02d}"
+        except OSError as e:
+            # Best-effort: a missing/unreadable results_dir is logged
+            # here; never raise.
+            logger.warning(
+                "nn scan of %s for session=%s failed: %s",
+                results_dir, session_id, e,
+            )
+
+    return ""
 
 
 def _render_readme(meta: dict[str, Any], results_dir: Path) -> str:
@@ -936,8 +1005,13 @@ def write_session_readme(
 
         # 2. Figure out which NN this call corresponds to.  After
         #    write_result has persisted the files, ``result["jsonPath"]``
-        #    is the cheapest source of truth; fall back to scanning.
-        nn = _current_nn_from_result(result)
+        #    is the cheapest source of truth; fall back to scanning
+        #    ``results_dir`` (PATH A: filesystem-anchored NN derivation,
+        #    robust against ``.`` in session_id which breaks the strict
+        #    result-set regex).
+        nn = _current_nn_from_result(
+            result, results_dir=results_dir, session_id=session_id,
+        )
         if not nn:
             # Conservative fallback: take the highest NN currently on
             # disk + 0 -- we don't want to invent numbers here, so we

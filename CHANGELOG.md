@@ -169,6 +169,87 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Vollstaendige Suite inkl. Phase-4-Regression-Check:
   ``pytest tests/ -v 2>&1 | tail -40``.
 
+## [1.1.0] - 2026-07-15
+
+### Changed
+- **`feat(service): spec-aligned session layout (data/session/<sid>/)`** —
+  ``get_session_dir`` schreibt jetzt in das singular-Layout
+  ``<DATA_DIR>/session/<safe_sid>/`` (war plural
+  ``<DATA_DIR>/sessions/<safe_sid>/``).  Matches Spec AD-8 / Phase 4
+  und raeumt die ME4-UI-Response-Validator-Stage-3-Warnung
+  ``does not end with the canonical /work/session/<sid>/results`` ab.
+  ``get_results_dir``, ``next_function_index`` und
+  ``update_session_notes`` bleiben unveraendert (sie haengen an
+  ``get_session_dir`` und erben das singular-Layout automatisch).
+  Neuer Backward-Compat-Helper ``resolve_session_dir(session_id)``
+  liefert canonical wenn existent, sonst legacy, und legt NUR im
+  Notfall canonical an (schreibt nie in ``data/sessions/``).  Siehe
+  ``docs/concepts/session-layout-v1.md`` fuer das Gesamtbild
+  (Layout, Migration, FAQ zu ``.01``/``.02``/``.03``-Dateien).
+- **Version-Spiegel**: 5 Spiegelorte + ``tests/test_config.py`` und
+  ``docs/concepts/session-layout-v1.md`` konsistent auf ``1.1.0``
+  (pyproject.toml, app/__init__.py, app/config.py,
+  services/me4-youtube.service.json, CHANGELOG.md, test_config.test_defaults,
+  docs/concepts/session-layout-v1.md).
+
+### Added
+- **Neues Script ``scripts/migrate_session_layout.py``** (15 KB,
+  480 LOC) — idempotente, dry-run-faehige, atomic-per-session
+  Migration ``data/sessions/<sid>/`` -> ``data/session/<sid>/``
+  (Backup zuerst nach ``data/sessions.legacy-<ts>/``, dann
+  ``os.replace`` pro Session).  JSON-Report auf stdout UND unter
+  ``data/migration/<ts>.log``.  Exit-Codes: 0=clean, 1=partial,
+  2=operator-review.  Default ist dry-run; nur mit ``--force`` wird
+  tatsaechlich verschoben.  Ersetzt leere pre-1.0.5
+  ``work/`` + ``work.backup-*``-Leftovers durch
+  ``*.legacy-empty-<ts>/`` (kein ``rm -rf``, alles rueckbaubar).
+- **Lifespan-Integration in ``main.py``**: Auf jedem Service-Start
+  wird die Migration automatisch ausgefuehrt, wenn
+  ``<DATA_DIR>/sessions/`` existiert und ``<DATA_DIR>/session/`` leer
+  ist.  Neuer CLI-Flag ``--with-migration=true|false`` (Default ON
+  fuer v1.1.0).  Log-Zeile ``migration complete: moved N sessions
+  in M seconds`` bei Erfolg.  Migration-Fehler blockieren den
+  Service-Start NICHT (best-effort, sichtbar im Log).
+- **Neue Concept-Doc ``docs/concepts/session-layout-v1.md``** (178
+  Zeilen) — erklaert das singular-Layout, die Migration, und
+  beantwortet explizit die User-Frage "warum .01/.02/.03-Dateien
+  in einem Ordner?" mit Verweis auf die Sequenz-Numerierung pro
+  Session (nicht pro Ordner).
+- **21 neue Tests** in 4 Dateien:
+  * ``tests/session_store/test_get_session_dir.py`` (6 Tests) —
+    ``get_session_dir`` liefert singular ``data/session/<sid>/``,
+    legt nie das Plural-Layout an, sanitisiert korrekt.
+  * ``tests/session_store/test_resolve_session_dir.py`` (7 Tests) —
+    canonical-only, legacy-only, neither, both-priorities.
+  * ``tests/migrate_session_layout/test_idempotent.py`` (5 Tests) —
+    zweiter Lauf ist no-op, skip bei existierendem canonical,
+    dry-run veraendert nichts, non-empty ``work/`` triggert
+    Warning + exit-code 2, empty ``work.backup-*`` wird renamed.
+  * ``tests/migrate_session_layout/test_atomicity.py`` (3 Tests) —
+    nach Migration existiert jede Datei genau einmal (canonical
+    ODER legacy, nie in beiden), paralleler Reader sieht Session
+    waehrend der Migration in genau einem Layout.
+
+### Notes
+- **Verifikation**:
+  ``pytest tests/`` -> 155 passed, 2 pre-existing failed
+  (manifest-tests, dokumentiert in 1.0.6-Notes / out-of-scope).
+  ``ruff check scripts/migrate_session_layout.py tests/session_store/
+  tests/migrate_session_layout/`` -> 0 errors.
+- **Operator-Action-Items**:
+  * Nach einer Release-Periode (>=1 minor) koennen die
+    Backup-Verzeichnisse ``data/sessions.legacy-<ts>/`` und die
+    renamed Leftovers ``data/work*.legacy-empty-<ts>/`` per
+    ``rm -rf`` aufgeraeumt werden.
+  * Wer die Auto-Migration deaktivieren will, startet mit
+    ``python main.py --with-migration=false``.  Das Standalone-
+    Script ``scripts/migrate_session_layout.py --force`` bleibt
+    der Operator-Entry-Point fuer manuelle Replays.
+- **Backward-Compat-Garantie**: Reads akzeptieren BEIDE Layouts
+  (``data/session/<sid>/`` und ``data/sessions/<sid>/``) fuer
+  mindestens eine Minor-Release.  Writes gehen IMMER in das
+  kanonische singular-Layout.
+
 ## [Unreleased]
 
 ### Fixed

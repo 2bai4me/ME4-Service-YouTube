@@ -65,7 +65,7 @@ class TestYT08_01_ResultsDirCreated:
     """Spec YT-08 Case 1: ``WORK_DIR/session/<sid>/results`` wird erzeugt
     sobald der erste ``write_result``-Call fuer ``<sid>`` laeuft.
 
-    Pfad-Konvention (Master-Doku): ``<WORK_DIR>/sessions/<sid>/results``
+    Pfad-Konvention (Master-Doku): ``<WORK_DIR>/session/<sid>/results``
     (siehe ``get_session_dir`` + ``get_results_dir`` in
     ``app/session_store.py``).
     """
@@ -75,7 +75,7 @@ class TestYT08_01_ResultsDirCreated:
     ):
         sid = "yt08sid01"
         # Vor dem Call existiert weder Session- noch Results-Verzeichnis
-        session_dir = tmp_path / "sessions" / sid
+        session_dir = tmp_path / "session" / sid
         results_dir = session_dir / "results"
         assert not results_dir.exists()
 
@@ -100,7 +100,7 @@ class TestYT08_01_ResultsDirCreated:
     def test_results_dir_path_shape(
         self, isolated_data_dir, tmp_path: Path
     ):
-        """Pfad-Form exakt: ``<data_dir>/sessions/<sid>/results``."""
+        """Pfad-Form exakt: ``<data_dir>/session/<sid>/results``."""
         sid = "yt08path01"
         write_result(
             sid, "get-metadata",
@@ -108,7 +108,7 @@ class TestYT08_01_ResultsDirCreated:
             request={"sessionId": sid, "url": "https://x"},
         )
         results_dir = get_results_dir(sid)
-        expected = (tmp_path / "sessions" / sid / "results").resolve()
+        expected = (tmp_path / "session" / sid / "results").resolve()
         assert results_dir.resolve() == expected, (
             f"Results-Pfad weicht vom erwarteten Master-Schema ab: "
             f"{results_dir.resolve()} vs {expected}"

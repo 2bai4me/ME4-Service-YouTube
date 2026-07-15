@@ -1,11 +1,25 @@
 """Session-basierte Persistenz für ME4-YouTube.
 
 Jede Session (identifiziert durch eine vom Baustein vergebene ID) bekommt
-ein eigenes Verzeichnis unter ``data/sessions/<session_id>/``.  Darin liegt
-eine ``Notes.md``-Logdatei und pro Funktionsaufruf ein numeriertes
-Unterverzeichnis (``01-get-metadata/``, ``02-download/``, …) mit jeweils
-``result.json`` (Rohdaten), ``result.md`` (hübsch formatierte Variante)
-und ``result.html`` (standalone HTML-Version mit eingebettetem Styling).
+ein eigenes Verzeichnis unter ``data/session/<session_id>/`` (singular —
+matches spec AD-8 / Phase 4 ``/work/session/<sid>/`` and resolves the
+ME4-UI response-validator Stage 3 "does not end with the canonical
+/work/session/<sid>/results" warning).  Darin liegt eine ``Notes.md``
+Logdatei und pro Funktionsaufruf eine Sequenz von drei Datei-Ansichten
+desselben logischen Ergebnisses unter
+``results/<sid>.<NN>result.{json,md,html}``.
+
+Drei Dateiansichten (``json``/``md``/``html``) zaehlen als EINE Sequenz.
+``Notes.md`` wird per Call angehaengt, nie ueberschrieben, und beginnt
+auf Zeile 1 immer idempotent mit ``# Session <safe_sid>``.
+
+Reads akzeptieren fuer mindestens eine Minor-Version beide Layouts
+(singular + legacy plural) — siehe ``resolve_session_dir``.  Writes
+gehen immer in das kanonische singular-Layout.
+
+Migration vom alten ``data/sessions/<sid>/``-Layout wird vom
+Service-Start (``main.py``) bzw. vom Standalone-Script
+``scripts/migrate_session_layout.py`` ausgefuehrt.
 
 Das Baustein zeigt im Chat nur noch den Pfad — die eigentlichen Daten
 werden vom Service bei sich lokal abgelegt.
@@ -28,21 +42,26 @@ logger = get_logger(__name__)
 
 
 # ---------------------------------------------------------------------------
-# Pfad-Layout
+# Pfad-Layout  (Spec AD-8 / Phase 4: singular ``session/``)
 # ---------------------------------------------------------------------------
 #
-#   <sessions-root>/
-#     <session_id>/
-#       Notes.md                       # Logdatei, erste Zeile = Session-ID
-#       01-get-metadata/
-#         result.json
-#         result.md
-#       02-get-transcript/
-#         ...
-#       03-download/
-#         result.json
-#         result.md
-#         <downloaded files>            # tatsächliche Video-/Audio-Datei
+#   <data-root>/session/<safe_sid>/        # kanonisch (singular)
+#     Notes.md                             # Logdatei, erste Zeile = Session-ID
+#     results/                             # Resultset-Verzeichnis
+#       <safe_sid>.01result.json
+#       <safe_sid>.01result.md
+#       <safe_sid>.01result.html
+#       <safe_sid>.02result.json
+#       <safe_sid>.02result.md
+#       <safe_sid>.02result.html
+#       <safe_sid>.NNresult.<ext>          # per-call Artefakt-Downloads
+#
+#   <data-root>/sessions/<safe_sid>/       # legacy (plural) — read-only
+#                                          # nach v1.1.0-Migration
+#
+# Drei Dateiansichten (json/md/html) zaehlen als EINE Sequenz (F-05/YT-02);
+# ``next_function_index`` zaehlt nur Sequenzen, deren <sid>-Segment zur
+# aufrufenden session_id passt (Cross-Session-Schutz).
 #
 
 def _slug(s: str) -> str:
@@ -57,11 +76,70 @@ def _slug(s: str) -> str:
 
 
 def get_session_dir(session_id: str) -> Path:
-    """Root directory for a session."""
+    """Canonical root directory for a session: ``<DATA_DIR>/session/<safe_id>``.
+
+    Singular ``session/`` (spec AD-8 / Phase 4) — resolves the
+    ME4-UI response-validator Stage 3 "does not end with the canonical
+    /work/session/<sid>/results" warning.
+
+    The function ALWAYS returns the canonical (singular) path and
+    creates it on demand; it NEVER touches the legacy ``sessions/``
+    directory.  For backward-compatible reads (accept both layouts for
+    at least one minor release), use :func:`resolve_session_dir` instead.
+
+    Args:
+        session_id: The raw session id (will be sanitised to ``safe_id``
+            — only alnum + ``-`` + ``_`` are kept).
+
+    Returns:
+        Absolute path to ``<DATA_DIR>/session/<safe_id>/`` (created if
+        missing).  Always uses forward-slashes in its string form on
+        POSIX; on Windows, ``Path`` already uses the platform separator.
+    """
     safe_id = "".join(c for c in session_id if c.isalnum() or c in "-_") or "unknown"
-    base = Path(settings.data_dir) / "sessions" / safe_id
+    base = Path(settings.data_dir) / "session" / safe_id
     base.mkdir(parents=True, exist_ok=True)
     return base
+
+
+def resolve_session_dir(session_id: str) -> Path:
+    """Backward-compat read-path: returns canonical or legacy session dir.
+
+    Resolution order (creates canonical if NEITHER exists):
+
+      1. If ``<DATA_DIR>/session/<safe_id>/`` exists, return it
+         (canonical, post-migration state).
+      2. Else if ``<DATA_DIR>/sessions/<safe_id>/`` exists, return it
+         (legacy, pre-v1.1.0 state — reads still accepted for one minor
+         release so the migration is non-disruptive).
+      3. Else create and return the canonical path
+         (``<DATA_DIR>/session/<safe_id>/``).
+
+    This helper is intended for **read** code paths that must keep
+    working during the singular transition.  Write code paths
+    (``write_result`` etc.) MUST use :func:`get_session_dir` directly
+    so new data always lands in the canonical singular layout.
+
+    Args:
+        session_id: The raw session id (sanitised internally).
+
+    Returns:
+        Absolute path to the resolved session directory.  Does NOT
+        create directories in the legacy case (the data is already on
+        disk); does create the canonical directory when neither layout
+        exists yet.
+    """
+    safe_id = "".join(c for c in session_id if c.isalnum() or c in "-_") or "unknown"
+    data_root = Path(settings.data_dir)
+    canonical = data_root / "session" / safe_id
+    if canonical.exists():
+        return canonical
+    legacy = data_root / "sessions" / safe_id
+    if legacy.exists():
+        return legacy
+    # Neither exists — create canonical (NEVER touch legacy at write-time).
+    canonical.mkdir(parents=True, exist_ok=True)
+    return canonical
 
 
 def get_function_dir(session_id: str, function_name: str) -> Path:

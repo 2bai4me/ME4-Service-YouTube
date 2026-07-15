@@ -208,12 +208,12 @@ class TestWindowsPathTranslation:
     def test_translation_handles_nested_subdirs(self, with_windows_translation):
         """Tiefe Subdirs werden vollstaendig uebersetzt, jeder ``/`` -> ``\\``."""
         out = to_platform_path(
-            "/mnt/d/DEV/wt-me4-yt-paths-open/data/sessions/"
+            "/mnt/d/DEV/wt-me4-yt-paths-open/data/session/"
             "abc-123/results/abc-123.05result.html"
         )
         expected = (
             "D:" + _DSEP + "DEV" + _DSEP + "wt-me4-yt-paths-open" + _DSEP
-            + "data" + _DSEP + "sessions" + _DSEP + "abc-123" + _DSEP
+            + "data" + _DSEP + "session" + _DSEP + "abc-123" + _DSEP
             + "results" + _DSEP + "abc-123.05result.html"
         )
         assert out == expected, (
